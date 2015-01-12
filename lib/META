@@ -1,0 +1,12 @@
+# OASIS_START
+# DO NOT EDIT (digest: 3c600b2f4ccf8651673c518431195523)
+version = "0.1.0"
+description = "A loyal and A loyal and faithful synchronisation tool"
+requires = "lwt irmin.unix re.glob toml dolog"
+archive(byte) = "dog.cma"
+archive(byte, plugin) = "dog.cma"
+archive(native) = "dog.cmxa"
+archive(native, plugin) = "dog.cmxs"
+exists_if = "dog.cma"
+# OASIS_STOP
+

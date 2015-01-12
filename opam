@@ -1,0 +1,30 @@
+opam-version: "1.2"
+maintainer:   "thomas@gazagnaire.org"
+authors:      "Thomas Gazagnaire"
+license:      "ISC"
+homepage:     "https://github.com/samoht/dog"
+bug-reports:  "https://github.com/samoht/dog/issues"
+dev-repo:     "https://github.com/samoht/dog.git"
+
+build: [
+  ["./configure" "--prefix" prefix "--{alcotest:enable}-test"]
+  [make]
+]
+build-test: [
+  [make "test"]
+]
+install: [make "install"]
+remove: [
+  ["ocamlfind" "remove" "dog"]
+  ["rm" "-f" "%{bin}%/dog"]
+]
+depends: [
+  "lwt" {>= "2.4.5"}
+  "irmin" {>= "0.9.1"}
+  "git"
+  "re"
+  "dolog" {>= "1.0"}
+  "cdmliner"
+  "toml" {>= "2.1.0"}
+  "alcotest" {test}
+]
