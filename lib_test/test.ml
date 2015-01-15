@@ -31,9 +31,9 @@ let simple_merge () =
   in
   check `Ignore;
   check `Replace;
-  check `Line_set;
+  check `Set;
+  check `Append;
   check `Jsonx;
-  check `Line_append;
   neg_check "foo";
   neg_check "bar"
 
@@ -51,27 +51,21 @@ let simple_pattern () =
   check "f?o/**" "fio/uuu";
   check ~neg:true "f?o/**" "fio"
 
-let conf =
-  Dog.conf ~client:"client" ~server:(Uri.of_string "server") ~merges:[
-    Dog.pattern_exn "f?o/**", `Replace;
-    Dog.pattern_exn "foo"   , `Line_set;
-  ]
+let merges: Dog.merges = [
+  Dog.pattern_exn "f?o/**", `Replace;
+  Dog.pattern_exn "foo"   , `Set;
+]
 
-let simple_conf () =
-  let check x y = assert_bool x (Dog.merge conf x = y) in
-  check "foo"  `Line_set;
+let simple_merges () =
+  let check x y = assert_bool x (Dog.merge merges x = y) in
+  check "foo"  `Set;
   check "foo/" `Replace;
   check "fo"   `Ignore
 
-let simple_toml () =
-  let toml = Dog.toml_of_conf conf in
-  Toml.Printer.table Format.err_formatter toml;
-  let conf' = Dog.conf_of_toml toml in
-  assert_bool "server" (Dog.server conf = Dog.server conf');
-  assert_bool "client" (Dog.client conf = Dog.client conf');
-  let cmp (x,_) (y,_) = Dog.compare_pattern x y in
-  let merges = List.sort cmp (Dog.merges conf) in
-  let merges' = List.sort cmp (Dog.merges conf') in
+let simple_dot_merges () =
+  let str = Dog.string_of_merges merges in
+  eprintf "merges:\n%s\n%!" str;
+  let merges' = Dog.merges_of_string str in
   try
     let c = ref 0 in
     List.iter2 (fun (p1, m1) (p2, m2) ->
@@ -85,8 +79,8 @@ let simple_toml () =
 let simple = [
   "merge"  , `Quick, simple_merge;
   "pattern", `Quick, simple_pattern;
-  "conf"   , `Quick, simple_conf;
-  "toml"   , `Quick, simple_toml;
+  "merges" , `Quick, simple_merges;
+  ".merges", `Quick, simple_dot_merges;
 ]
 
 let () =

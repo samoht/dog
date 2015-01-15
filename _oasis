@@ -11,7 +11,7 @@ Library dog
   Path:              lib/
   Findlibname:       dog
   Modules:           Dog
-  BuildDepends:      lwt, irmin.unix, re.glob, toml, dolog
+  BuildDepends:      lwt, irmin.unix, re.glob, dolog
 
 Executable dog
   Path:             bin/

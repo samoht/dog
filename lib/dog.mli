@@ -21,16 +21,16 @@
 type merge =
   [ `Ignore
   | `Replace
-  | `Line_set
-  | `Line_append
+  | `Set
+  | `Append
   | `Jsonx ]
 (** The different merge strategies.
 
     {ul
     {- [Ignore] skips the client file.}
     {- [Replace] replaces the server file by the client one.}
-    {- [Line_set] adds the client lines to the server files.}
-    {- [Line_append] appends lines at the end of the server files.}
+    {- [Set] adds the client lines to the server files.}
+    {- [Append] appends lines at the end of the server files.}
     {- [Jsonx] considers the file as a JSON value and merge the value on
     the server with the client version. The `x` stands for the special
     merge semantics that we use: records are considered as k/v maps and
@@ -69,63 +69,45 @@ val string_of_pattern: pattern -> string
 val check: pattern -> (string -> bool)
 (** Check a pattern. *)
 
-type conf
-(** The type for client configurations. *)
-
-val conf: client:string -> server:Uri.t -> merges:(pattern * merge) list
-  -> conf
-(** Build a configuration value for a Dog client's store. *)
-
-val client: conf -> string
-(** The client's name, used as commit's username. *)
-
-val server: conf -> Uri.t
-(** The root of the filesystem managed by the client. *)
-
-val merges: conf -> (pattern * merge) list
+type merges = (pattern * merge) list
 (** FIXME *)
 
-val merge: conf -> string -> merge
-(** [merge conf file] is the merge strategy associated with the
-    filename [file]. *)
-
-val toml_of_conf: conf -> Toml.Value.table
+val merge: merges -> string -> merge
 (** FIXME *)
 
-val conf_of_toml: Toml.Value.table -> conf
+val dot_merges_file: string list
+(** [dot_merge] is [[".merge"]]. *)
+
+val default_merges: (pattern * merge) list
+(** The default merge pattern is the rule [dot_merge -> `Set]. *)
+
+val string_of_merges: merges -> string
 (** FIXME *)
+
+val merges_of_string: string -> merges
+(** FIXME *)
+
 
 (** {1 Files} *)
 
 type file
 (** The type for files. *)
 
-val conf_path: string list
-(** [conf_path] is [[".dog"]]. *)
-
 (** {1 Commands} *)
 
 type t = (string list, file) Irmin.t
 (** The type for Dog stores. *)
 
-val with_store: root:string -> string -> (t -> 'a Lwt.t) -> 'a Lwt.t
+val with_store:
+  root:string -> string -> ((unit -> merges Lwt.t) -> t -> 'a Lwt.t) -> 'a Lwt.t
 (** [with_store ~root msg f] loads the configuration stored in
     {!conf_path} and apply the function [f] to the resulting
     store. Use [msg] as commit message if necessary. *)
 
-val init: root:string -> conf -> unit Lwt.t
+val init: root:string -> string -> unit Lwt.t
 (** FIXME *)
 
-val list_merges: root:string -> (pattern * merge) list Lwt.t
-(** FIXME *)
-
-val add_merge: root:string -> pattern -> merge -> unit Lwt.t
-(** FIXME *)
-
-val remove_merge: root:string -> pattern -> unit Lwt.t
-(** FIXME *)
-
-val push: root:string -> string -> unit Lwt.t
+val push: root:string -> msg:string -> Uri.t -> unit Lwt.t
 (** FIXME *)
 
 val listen: root:string -> unit Lwt.t

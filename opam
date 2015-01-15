@@ -25,6 +25,5 @@ depends: [
   "re"
   "dolog" {>= "1.0"}
   "cdmliner"
-  "toml" {>= "2.1.0"}
   "alcotest" {test}
 ]

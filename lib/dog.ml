@@ -17,6 +17,22 @@
 open Printf
 open Irmin_unix
 
+let (>>=) = Lwt.bind
+
+let rec pretty_list ?(last="and") = function
+  | []    -> ""
+  | [a]   -> a
+  | [a;b] -> Printf.sprintf "%s %s %s" a last b
+  | h::t  -> Printf.sprintf "%s, %s" h (pretty_list t)
+
+let string_chop_prefix t ~prefix =
+  let lt = String.length t in
+  let lp = String.length prefix in
+  if lt < lp then None else
+    let p = String.sub t 0 lp in
+    if String.compare p prefix <> 0 then None
+    else Some (String.sub t lp (lt - lp))
+
 let ppf f oc =
   let ppf = Format.formatter_of_out_channel oc in
   f ppf
@@ -24,29 +40,35 @@ let ppf f oc =
 type merge =
   [ `Ignore
   | `Replace
-  | `Line_set
-  | `Line_append
+  | `Set
+  | `Append
   | `Jsonx ]
 
 let string_of_merge = function
   | `Ignore -> "ignore"
   | `Replace -> "replace"
-  | `Line_set -> "line-set"
-  | `Line_append -> "line-append"
+  | `Set -> "set"
+  | `Append -> "append"
   | `Jsonx -> "jsonx"
+
+let all_merges =
+  let all = [ `Ignore; `Replace; `Set; `Append; `Jsonx ] in
+  sprintf "{ %s }" (pretty_list (List.map string_of_merge all))
 
 let merge_of_string = function
   | "ignore" -> Some `Ignore
   | "replace" -> Some `Replace
-  | "line-set" -> Some `Line_set
-  | "line-append" -> Some `Line_append
+  | "set" -> Some `Set
+  | "append" -> Some `Append
   | "jsonx" -> Some `Jsonx
   | s -> None
 
 let merge_of_string_exn x =
   match merge_of_string x with
   | Some x -> x
-  | None -> failwith (sprintf "%s is not a valid merge strategies." x)
+  | None ->
+    failwith (sprintf "%s is not a valid merge strategies. \
+                       Valid stategies are: %s" x all_merges)
 
 type pattern = string * (string -> bool)
 
@@ -72,82 +94,58 @@ let pattern_exn pat =
 
 let check (_, f) x = f x
 
-type conf = {
-  client: string;
-  server: Uri.t;
-  merges: (pattern * merge) list;
-}
+type merges = (pattern * merge) list
 
-let toml_of_merge (p, m) =
-  Toml.Value.Of.Array.string [string_of_pattern p; string_of_merge m]
+let string_of_pm (p, m) =
+  Printf.sprintf "%s %s" (string_of_pattern p) (string_of_merge m)
 
-let merge_of_toml t =
-  match Toml.Value.To.Array.string t with
-  | []     -> failwith "empty merge pattern"
-  | [p; m] -> (pattern_exn p, merge_of_string_exn m)
-  | p :: _ -> failwith (sprintf "%s has too many merge stategies" p)
+let pm_of_string_exn s =
+  if String.length s > 0 && s.[0] = '#' then
+    (* discard comments *)
+    None
+  else try
+      let s = String.trim s in
+      let i = String.rindex s ' ' in
+      let p = String.sub s 0 i in
+      let m = String.sub s (i+1) (String.length s - i - 1) in
+      Some (pattern_exn p, merge_of_string_exn m)
+    with Not_found ->
+      failwith (sprintf "%s is not a valid merge strategy line." s)
 
-let toml_of_merges ms =
-  List.map toml_of_merge ms
-  |> Toml.Value.Of.Array.array
-  |> Toml.Value.Of.array
-
-let merges_of_toml t =
-  Log.debug "merges: %a" (ppf Toml.Printer.value) t;
-  Toml.Value.To.array t
-  |> Toml.Value.To.Array.array
-  |> List.map merge_of_toml
-
-let toml_of_conf conf =
-  List.fold_left (fun map (k, v) ->
-      Toml.Table.add (Toml.key k) v map
-    ) Toml.Table.empty [
-    "client", Toml.Value.Of.string conf.client;
-    "server", Toml.Value.Of.string (Uri.to_string conf.server);
-    "merges", toml_of_merges conf.merges;
-  ]
-
-let conf_of_toml t =
-  let read key fn =
-    try Toml.Table.find (Toml.key key) t |> fn
-    with Not_found -> failwith (sprintf "conf_of_toml: missing %s" key)
-  in
-  let client = read "client" Toml.Value.To.string in
-  let server = read "server" (fun x -> Uri.of_string (Toml.Value.To.string x)) in
-  let merges = read "merges" merges_of_toml in
-  { client; server; merges }
-
-let string_of_conf conf =
-  let buf = Buffer.create 1024 in
-  let ppf = Format.formatter_of_buffer buf in
-  Toml.Printer.table ppf (toml_of_conf conf);
+let string_of_merges ms =
+  let buf = Buffer.create 1025 in
+  List.iter (fun pm ->
+      Buffer.add_string buf (string_of_pm pm);
+      Buffer.add_char buf '\n';
+    ) ms;
   Buffer.contents buf
 
-let conf_of_string buf =
-  Toml.Parser.from_string buf
-  |> conf_of_toml
+let merges_of_string str =
+  let buf = Mstruct.of_string str in
+  let rec aux acc =
+    match Mstruct.get_string_delim buf '\n' with
+    | None   -> List.rev acc
+    | Some l ->
+      match pm_of_string_exn l with
+      | None   -> aux acc
+      | Some s -> aux (s :: acc)
+  in
+  aux []
 
-let conf ~client ~server ~merges =
-  { client; server; merges }
-
-let client c = c.client
-let server c = c.server
-let merges c = c.merges
-let merge c file =
-  try snd (List.find (fun (pat, _) -> check pat file) c.merges)
+let merge merges file =
+  try snd (List.find (fun (pat, _) -> check pat file) merges)
   with Not_found -> `Ignore
 
 type file = {
-  conf: conf;
   digest: Digest.t;
   buf: Cstruct.t;
 }
 
 let digest buf = Digest.string (Cstruct.to_string buf)
-let file conf buf = { buf; digest = digest buf; conf }
+let file buf = { buf; digest = digest buf }
 
 module type CONF = sig
-  val v: conf
+  val merges: unit -> merges Lwt.t
 end
 
 module Lines = struct
@@ -186,59 +184,152 @@ module File (Conf: CONF) = struct
     Cstruct.blit t.buf 0 buf 0 len;
     Cstruct.shift buf len
 
-  let read buf = file Conf.v (Mstruct.to_cstruct buf)
+  let read buf = file (Mstruct.to_cstruct buf)
 
+  (* FIXME: cut lines? *)
   let to_json t = Ezjsonm.encode_string (Cstruct.to_string t.buf)
-  let of_json j = file Conf.v (Cstruct.of_string (Ezjsonm.decode_string_exn j))
+  let of_json j = file (Cstruct.of_string (Ezjsonm.decode_string_exn j))
 
   open Irmin.Merge.OP
 
   let merge_ignore ~old:_ _ _ = ok None
   let merge_replace ~old:_ _ y = ok y
-  let merge_line_set ~old:_ _ _= failwith "TODO"
-  let merge_line_append ~old:_ _ _ = failwith "TODO"
+  let merge_set ~old:_ _ _= failwith "TODO"
+  let merge_append ~old:_ _ _ = failwith "TODO"
   let merge_jsonx ~old:_ _ _ = failwith "TODO"
 
-  let merge (path:Path.t): t option Irmin.Merge.t =
-    let merge =  merge Conf.v (String.concat "/" path) in
+  let merge path ~old x y =
+    (* FIXME: cache the call? *)
+    Conf.merges () >>= fun merges ->
+    let merge =  merge merges (String.concat "/" path) in
     match merge with
-    | `Ignore -> merge_ignore
-    | `Replace -> merge_replace
-    | `Line_set -> merge_line_set
-    | `Line_append -> merge_line_append
-    | `Jsonx -> merge_jsonx
+    | `Ignore -> merge_ignore ~old x y
+    | `Replace -> merge_replace ~old x y
+    | `Set -> merge_set ~old x y
+    | `Append -> merge_append ~old x y
+    | `Jsonx -> merge_jsonx ~old x y
 
 end
 
 type t = (string list, file) Irmin.t
 
-let conf_path = [".dog"]
-
-let (>>=) = Lwt.bind
+let dot_merges = ".merges"
+let default_merges: merges = [ pattern_exn dot_merges, `Set ]
+let dot_merges_file = [dot_merges]
 
 (* Used for read the config file *)
-let base_store = Irmin.basic (module Irmin_git.FS) (module Irmin.Contents.String)
+let base_store =
+  Irmin.basic (module Irmin_git.FS) (module Irmin.Contents.String)
+
+let mk_store store ~root =
+  Git_unix.FS.create ~root () >>= fun g ->
+  Git_unix.FS.read_head g >>= function
+  | None  -> failwith (sprintf "%s is not a valid Git repository" root)
+  | Some (Git.Reference.SHA _) ->
+    failwith (sprintf "%s does not have a valid branch" root)
+  | Some (Git.Reference.Ref r) ->
+    let name =
+      let head = Git.Reference.to_raw r in
+      match string_chop_prefix head ~prefix:"refs/heads/" with
+      | None   -> failwith (sprintf "%s is not a valid reference" head)
+      | Some n -> n
+    in
+    let config = Irmin_git.config ~root ~bare:false ~head:r () in
+    Irmin.of_tag store config task name
+
+let raw_store = mk_store base_store
 
 let with_store ~root msg fn =
+  raw_store ~root >>= fun t ->
+  let merges () =
+    Irmin.read (t "Reading .merges") dot_merges_file >>= function
+    | None -> failwith (sprintf "%s is not a valid Dog repository." root)
+    | Some buf -> Lwt.return (merges_of_string buf)
+  in
+  let module Conf = struct let merges = merges end in
+  let module File = File (Conf) in
+  let store = Irmin.basic (module Irmin_git.FS) (module File) in
+  mk_store store ~root >>= fun t ->
+  fn Conf.merges (t msg)
+
+let task msg =
+  let date = Int64.of_float (Unix.gettimeofday ()) in
+  let owner =
+    let tmp = Filename.temp_file "git-config" "user-name" in
+    let i = Sys.command (sprintf "git config user.name > %s" tmp) in
+    let name =
+      if i <> 0 then Printf.sprintf "%s.[%d]" (Unix.gethostname()) (Unix.getpid())
+      else
+        let ic = open_in tmp in
+        input_line ic
+    in
+    Sys.remove tmp;
+    name
+  in
+  Irmin.Task.create ~date ~owner msg
+
+let init ~root name =
+  let head = Git.Reference.of_raw ("refs/heads/" ^ name) in
+  let config = Irmin_git.config ~root ~bare:false ~head () in
+  Irmin.of_tag base_store config task name >>= fun t ->
+  let merges = string_of_merges default_merges in
+  Irmin.update (t "Creating .merges.") dot_merges_file merges
+
+let remote_store =
+  Irmin.basic (module Irmin_http.Make) (module Irmin.Contents.String)
+
+let push ~root ~msg server =
+  with_store ~root "dog push" (fun _ t ->
+      let config = Irmin_http.config server in
+      Irmin.create remote_store config task >>= fun remote ->
+      let remote = Irmin.remote_basic (remote msg) in
+      Irmin.push_exn t remote
+    )
+
+(* FIXME: replace that by some Irmin watches on new tags (which
+   doesn't exist atm) *)
+let dot_clients_file = [".clients"]
+let clients_of_string buf =
+  let buf = Mstruct.of_string buf in
+  let rec aux acc =
+    match Mstruct.get_string_delim buf '\n' with
+    | None -> List.rev acc
+    | Some l -> aux (l :: acc)
+  in
+  aux []
+
+let str t fmt = Printf.ksprintf (fun str -> t str) fmt
+
+let listen ~root =
   let config = Irmin_git.config ~root ~bare:false () in
   Irmin.create base_store config task >>= fun t ->
-  Irmin.read (t "Reading the config file") conf_path >>= function
-  | None -> failwith (sprintf "%s is not a valid Dog repository." root)
-  | Some conf ->
-    let module Conf = struct let v = conf_of_string conf end in
-    let module File = File (Conf) in
-    let store = Irmin.basic (module Irmin_git.FS) (module File) in
-    Irmin.create store config task >>= fun t ->
-    fn (t msg)
-
-let init ~root conf =
-  let config = Irmin_git.config ~root ~bare:false () in
-  Irmin.create base_store config task >>= fun t ->
-  let conf = string_of_conf conf in
-  Irmin.update (t "Writing the configuration file.") conf_path conf
-
-let list_merges ~root = failwith "TODO"
-let add_merge ~root pattern merge = failwith "TODO"
-let remove_merge ~root pattern = failwith "TODO"
-let push ~root msg = failwith "TODO"
-let listen ~root = failwith "TODO"
+  Irmin.read (t "Loading .clients.") dot_clients_file >>= fun buf ->
+  let clients = match buf with
+    | None   -> []
+    | Some s -> clients_of_string s
+  in
+  with_store ~root "dog listen" (fun merges _ ->
+      let module Conf = struct let merges = merges end in
+      let module File = File (Conf) in
+      let module Server = Irmin.Basic (Irmin_git.FS) (File) in
+      let module HTTP = Irmin_http_server.Make(Server) in
+      Server.create config task >>= fun t ->
+      let listen () =
+        HTTP.listen (t "Listen") (Uri.of_string "http://localhost:1234")
+      in
+      let watch client =
+        Irmin.of_tag base_store config task client >>= fun c ->
+        let stream =
+          Irmin.watch_head (str c "Watching changes for client %s" client) []
+        in
+        Lwt_stream.iter_s (fun (_path, head) ->
+            Server.merge_head (str t "Merging %s's changes" client) head
+            >>= function
+            | `Ok () -> Lwt.return_unit
+            | `Conflict c ->
+              Log.error "Cannot merge %s: %s" client c;
+              Lwt.return_unit
+          ) stream
+      in
+      Lwt.join (listen () :: List.map watch clients)
+    )

@@ -104,66 +104,14 @@ let init = {
   doc  = "Initialize a client store.";
   man  = [];
   term =
-    let client =
+    let client_name =
       let doc =
-        Arg.info ~docv:"CLIENT" ~doc:"The client name." [] in
+        Arg.info ~docv:"NAME" ~doc:"The client name." [] in
       Arg.(required & pos 0 (some string) None & doc)
     in
-    let server =
-      let doc =
-        Arg.info ~docv:"SERVER" ~doc:"The server URI." [] in
-      Arg.(required & pos 1 (some string) None & doc)
-    in
-    let init root client server =
-      run begin
-        let server = Uri.of_string server in
-        let conf = Dog.conf ~client ~server ~merges:[] in
-        Dog.init ~root conf
-      end
-    in
-    Term.(mk init $ root $ client $ server)
+    let init root name = run (Dog.init ~root name) in
+    Term.(mk init $ root $ client_name)
 }
-
-(* MERGE *)
-let merge =
-  let commands = [
-    ["list"]  , `List, [], "List the current merge strategies.";
-    ["add"]   , `Add , ["PATTERN"; "MERGE"], "Add a new merge strategy.";
-    ["remove"], `Rm  , ["PATTERN"], "Remove a merge strategy.";
-  ] in
-  let man = [
-    `S "DESCRIPTION";
-    `P "This command manages the list of merge strategies."
-  ] @ Ezcmdliner.mk_subdoc ~defaults:["","list"] commands
-  in {
-    name = "merge";
-    doc  = "Configure the client merge strategies.";
-    man;
-    term =
-      let command, params = Ezcmdliner.mk_subcommands_with_default commands in
-      let (>>=) = Lwt.bind in
-      let ok () = Lwt.return (`Ok ()) in
-      let merge root command params =
-        match command, params with
-        | (None | Some `List), [] -> run begin
-            Dog.list_merges ~root >>= fun l ->
-            List.iter (fun (p, m) ->
-                printf "%20s %s" (Dog.string_of_pattern p) (Dog.string_of_merge m)
-              ) l;
-            ok ()
-          end
-        | Some `Add, [p;m] ->
-          let p = Dog.pattern_exn p in
-          let m = Dog.merge_of_string_exn m in
-          run (Dog.add_merge ~root p m >>= ok)
-        | Some `Rm, [p] ->
-          let p = Dog.pattern_exn p in
-          run (Dog.remove_merge ~root p >>= ok)
-        | command, params ->
-          Ezcmdliner.bad_subcommand "merge" commands command params
-      in
-      Term.(ret (mk merge $ root $ command $ params));
-  }
 
 (* PUSH *)
 let push = {
@@ -176,8 +124,16 @@ let push = {
         Arg.info ~docv:"MSG" ~doc:"The commit message." ["m"] in
       Arg.(required & opt (some string) None & doc)
     in
-    let push root msg = run (Dog.push ~root msg) in
-    Term.(mk push $ root $ msg);
+    let server =
+      let doc =
+        Arg.info ~docv:"SERVER" ~doc:"The server URI." [] in
+      Arg.(required & pos 0 (some string) None & doc)
+    in
+    let push root msg server =
+      let server = Uri.of_string server in
+      run (Dog.push ~root ~msg server)
+    in
+    Term.(mk push $ root $ msg $ server);
 }
 
 (* LISTEN *)
@@ -186,13 +142,8 @@ let listen = {
   doc  = "Listen for incoming client connections.";
   man  = [];
   term =
-    let msg =
-      let doc =
-        Arg.info ~docv:"MSG" ~doc:"The commit message." ["m"] in
-      Arg.(required & opt (some string) None & doc)
-    in
-    let push root msg = run (Dog.push ~root msg) in
-    Term.(mk push $ root $ msg);
+    let listen root = run (Dog.listen ~root) in
+    Term.(mk listen $ root);
 }
 
 (* HELP *)
@@ -234,12 +185,11 @@ let default =
       \n\
       The most commonly used subcommands are:\n\
       \    init        %s\n\
-      \    merge       %s\n\
       \    push        %s\n\
       \    listen      %s\n\
       \n\
       See `dog help <command>` for more information on a specific command.\n%!"
-      init.doc merge.doc push.doc listen.doc in
+      init.doc push.doc listen.doc in
   Term.(pure usage $ global),
   Term.info "dog"
     ~version:Version.current
