@@ -72,10 +72,13 @@ val check: pattern -> (string -> bool)
 type merges = (pattern * merge) list
 (** FIXME *)
 
-val merge: merges -> string -> merge
+type path = string list
 (** FIXME *)
 
-val dot_merges_file: string list
+val merge: merges -> path -> merge
+(** FIXME *)
+
+val dot_merge_file: path
 (** [dot_merge] is [[".merge"]]. *)
 
 val default_merges: (pattern * merge) list
@@ -95,14 +98,15 @@ type file
 
 (** {1 Commands} *)
 
-type t = (string list, file) Irmin.t
+type t = (path, file) Irmin.t
 (** The type for Dog stores. *)
 
 val with_store:
-  root:string -> string -> ((unit -> merges Lwt.t) -> t -> 'a Lwt.t) -> 'a Lwt.t
+  root:string -> (string -> string) -> ((unit -> merges Lwt.t) -> t -> 'a Lwt.t) -> 'a Lwt.t
 (** [with_store ~root msg f] loads the configuration stored in
     {!conf_path} and apply the function [f] to the resulting
-    store. Use [msg] as commit message if necessary. *)
+    store. Use [msg] as commit message if necessary. The [msg]
+    function takes the current branch bame as parameter. *)
 
 val init: root:string -> string -> unit Lwt.t
 (** FIXME *)

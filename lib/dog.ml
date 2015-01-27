@@ -19,6 +19,22 @@ open Irmin_unix
 
 let (>>=) = Lwt.bind
 
+let red fmt = sprintf ("\027[31m"^^fmt^^"\027[m")
+let green fmt = sprintf ("\027[32m"^^fmt^^"\027[m")
+let yellow fmt = sprintf ("\027[33m"^^fmt^^"\027[m")
+let blue fmt = sprintf ("\027[36m"^^fmt^^"\027[m")
+
+let red_s = red "%s"
+let green_s = green "%s"
+let yellow_s = yellow "%s"
+let blue_s = blue "%s"
+
+let info fmt =
+  kprintf (printf "%s\n%!") fmt
+
+let error fmt =
+  kprintf (fun str -> eprintf "%s %s\n%!" (red_s "error:") str) fmt
+
 let rec pretty_list ?(last="and") = function
   | []    -> ""
   | [a]   -> a
@@ -132,7 +148,11 @@ let merges_of_string str =
   in
   aux []
 
+type path = string list
+let path l = String.concat "/" l
+
 let merge merges file =
+  let file = path file in
   try snd (List.find (fun (pat, _) -> check pat file) merges)
   with Not_found -> `Ignore
 
@@ -168,7 +188,7 @@ module Lines = struct
 
 end
 
-module File (Conf: CONF) = struct
+module Raw_file = struct
 
   module Path = Irmin.Path.String_list
 
@@ -185,12 +205,23 @@ module File (Conf: CONF) = struct
     Cstruct.shift buf len
 
   let read buf = file (Mstruct.to_cstruct buf)
+  let of_path p =
+    let file = path p in
+    let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
+    let ba = Bigarray.(Array1.map_file fd char c_layout false (-1)) in
+    Unix.close fd;
+    read (Mstruct.of_bigarray ba)
 
   (* FIXME: cut lines? *)
   let to_json t = Ezjsonm.encode_string (Cstruct.to_string t.buf)
   let of_json j = file (Cstruct.of_string (Ezjsonm.decode_string_exn j))
 
+end
+
+module File (Conf: CONF) = struct
+
   open Irmin.Merge.OP
+  include Raw_file
 
   let merge_ignore ~old:_ _ _ = ok None
   let merge_replace ~old:_ _ y = ok y
@@ -201,7 +232,7 @@ module File (Conf: CONF) = struct
   let merge path ~old x y =
     (* FIXME: cache the call? *)
     Conf.merges () >>= fun merges ->
-    let merge =  merge merges (String.concat "/" path) in
+    let merge =  merge merges path in
     match merge with
     | `Ignore -> merge_ignore ~old x y
     | `Replace -> merge_replace ~old x y
@@ -211,11 +242,11 @@ module File (Conf: CONF) = struct
 
 end
 
-type t = (string list, file) Irmin.t
+type t = (path, file) Irmin.t
 
-let dot_merges = ".merges"
-let default_merges: merges = [ pattern_exn dot_merges, `Set ]
-let dot_merges_file = [dot_merges]
+let dot_merge = ".merge"
+let default_merges: merges = [ pattern_exn dot_merge, `Set ]
+let dot_merge_file = [dot_merge]
 
 (* Used for read the config file *)
 let base_store =
@@ -242,7 +273,7 @@ let raw_store = mk_store base_store
 let with_store ~root msg fn =
   raw_store ~root >>= fun t ->
   let merges () =
-    Irmin.read (t "Reading .merges") dot_merges_file >>= function
+    Irmin.read (t "Reading .merge") dot_merge_file >>= function
     | None -> failwith (sprintf "%s is not a valid Dog repository." root)
     | Some buf -> Lwt.return (merges_of_string buf)
   in
@@ -250,7 +281,8 @@ let with_store ~root msg fn =
   let module File = File (Conf) in
   let store = Irmin.basic (module Irmin_git.FS) (module File) in
   mk_store store ~root >>= fun t ->
-  fn Conf.merges (t msg)
+  let tag = Irmin.tag_exn (t "Getting the branch name") in
+  fn Conf.merges (t (msg tag))
 
 let task msg =
   let date = Int64.of_float (Unix.gettimeofday ()) in
@@ -272,43 +304,96 @@ let init ~root name =
   let head = Git.Reference.of_raw ("refs/heads/" ^ name) in
   let config = Irmin_git.config ~root ~bare:false ~head () in
   Irmin.of_tag base_store config task name >>= fun t ->
-  let merges = string_of_merges default_merges in
-  Irmin.update (t "Creating .merges.") dot_merges_file merges
+  Irmin.mem (t "Reading .merge") dot_merge_file >>= function
+  | true  -> Lwt.return_unit
+  | false ->
+    let merges = string_of_merges default_merges in
+    Irmin.update (t "Initial commit") dot_merge_file merges
 
 let remote_store =
   Irmin.basic (module Irmin_http.Make) (module Irmin.Contents.String)
 
-let push ~root ~msg server =
-  with_store ~root "dog push" (fun _ t ->
-      let config = Irmin_http.config server in
-      Irmin.create remote_store config task >>= fun remote ->
-      let remote = Irmin.remote_basic (remote msg) in
-      Irmin.push_exn t remote
+let chdir dir = Unix.handle_unix_error Unix.chdir dir
+
+let in_dir dir fn =
+  let reset_cwd =
+    let cwd = Unix.handle_unix_error Unix.getcwd () in
+    fun () -> chdir cwd in
+  chdir dir;
+  try
+    let r = fn () in
+    reset_cwd ();
+    r
+  with e ->
+    reset_cwd ();
+    raise e
+
+let (/) x y = x @ [y]
+
+let list kind dir =
+  in_dir dir (fun () ->
+      let d = Sys.readdir (Sys.getcwd ()) in
+      let d = Array.to_list d in
+      List.filter kind d
     )
 
-(* FIXME: replace that by some Irmin watches on new tags (which
-   doesn't exist atm) *)
-let dot_clients_file = [".clients"]
-let clients_of_string buf =
-  let buf = Mstruct.of_string buf in
-  let rec aux acc =
-    match Mstruct.get_string_delim buf '\n' with
-    | None -> List.rev acc
-    | Some l -> aux (l :: acc)
-  in
-  aux []
+let files =
+  list (fun f -> try not (Sys.is_directory f) with Sys_error _ -> true)
+
+let directories =
+  list (fun f -> try Sys.is_directory f with Sys_error _ -> false)
+
+let rec_files ?(keep=fun _ -> true) root =
+  let rec aux accu dir =
+    let path = path (root :: dir) in
+    let d =
+      directories path
+      |> List.filter keep
+      |> List.map ((/) dir)
+    in
+    let f =
+      files path
+      |> List.filter keep
+      |> List.map ((/) dir)
+    in
+    List.fold_left aux (f @ accu) d in
+  aux [] []
+
+let keep = function ".git" -> false | _ -> true
+
+module type RW = Irmin.RW with type key = path and type value = file
+
+let update_files files =
+  object
+    method f: 'a . ('a, path, file) Irmin.rw -> 'a -> unit Lwt.t =
+      fun (type a) (module M: RW with type t = a) t ->
+    Lwt_list.iter_s (fun path ->
+        M.update t path (Raw_file.of_path path)
+      ) files
+  end
+
+let push ~root ~msg server =
+  let open Irmin.Merge.OP in
+  let msg = sprintf "[%s] dog push" in
+  with_store ~root msg (fun _ t ->
+      let config = Irmin_http.config server in
+      Irmin.create remote_store config task >>= fun remote ->
+      let files = rec_files ~keep root in
+      Irmin.with_rw_view t `Update (update_files files) >>=
+      Irmin.Merge.exn >>= fun () ->
+      let remote = Irmin.remote_basic (remote "dog push") in
+      Irmin.push_exn t remote
+    )
 
 let str t fmt = Printf.ksprintf (fun str -> t str) fmt
 
 let listen ~root =
-  let config = Irmin_git.config ~root ~bare:false () in
-  Irmin.create base_store config task >>= fun t ->
-  Irmin.read (t "Loading .clients.") dot_clients_file >>= fun buf ->
-  let clients = match buf with
-    | None   -> []
-    | Some s -> clients_of_string s
+  let config =
+    Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()
   in
-  with_store ~root "dog listen" (fun merges _ ->
+  Irmin.create base_store config task >>= fun t ->
+  Irmin.tags (t "Getting tags") >>= fun clients ->
+  with_store ~root (fun _ -> "dog listen") (fun merges _ ->
       let module Conf = struct let merges = merges end in
       let module File = File (Conf) in
       let module Server = Irmin.Basic (Irmin_git.FS) (File) in
