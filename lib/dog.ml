@@ -242,7 +242,7 @@ module File (Conf: CONF) = struct
 
 end
 
-type t = (path, file) Irmin.t
+type t = ([`BC], path, file) Irmin.t
 
 let dot_merge = ".merge"
 let default_merges: merges = [ pattern_exn dot_merge, `Set ]
@@ -363,14 +363,10 @@ let keep = function ".git" -> false | _ -> true
 
 module type RW = Irmin.RW with type key = path and type value = file
 
-let update_files files =
-  object
-    method f: 'a . ('a, path, file) Irmin.rw -> 'a -> unit Lwt.t =
-      fun (type a) (module M: RW with type t = a) t ->
-    Lwt_list.iter_s (fun path ->
-        M.update t path (Raw_file.of_path path)
-      ) files
-  end
+let update_files files view =
+  Lwt_list.iter_s (fun path ->
+      Irmin.update view path (Raw_file.of_path path)
+    ) files
 
 let push ~root ~msg server =
   let open Irmin.Merge.OP in
@@ -379,7 +375,7 @@ let push ~root ~msg server =
       let config = Irmin_http.config server in
       Irmin.create remote_store config task >>= fun remote ->
       let files = rec_files ~keep root in
-      Irmin.with_rw_view t `Update (update_files files) >>=
+      Irmin.with_hrw_view t `Update (update_files files) >>=
       Irmin.Merge.exn >>= fun () ->
       let remote = Irmin.remote_basic (remote "dog push") in
       Irmin.push_exn t remote

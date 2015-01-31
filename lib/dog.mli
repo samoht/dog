@@ -98,7 +98,7 @@ type file
 
 (** {1 Commands} *)
 
-type t = (path, file) Irmin.t
+type t = ([`BC], path, file) Irmin.t
 (** The type for Dog stores. *)
 
 val with_store:
