@@ -17,6 +17,15 @@
 open Printf
 open Irmin_unix
 
+let () =
+  let debug = try match Sys.getenv "DOGDEBUG" with
+    | "" -> false
+    | _  -> true
+    with Not_found ->
+      false
+  in
+  if debug then Log.set_log_level Log.DEBUG
+
 let (>>=) = Lwt.bind
 
 let red fmt = sprintf ("\027[31m"^^fmt^^"\027[m")
@@ -274,7 +283,7 @@ let with_store ~root msg fn =
   raw_store ~root >>= fun t ->
   let merges () =
     Irmin.read (t "Reading .merge") dot_merge_file >>= function
-    | None -> failwith (sprintf "%s is not a valid Dog repository." root)
+    | None     -> Lwt.return []
     | Some buf -> Lwt.return (merges_of_string buf)
   in
   let module Conf = struct let merges = merges end in
@@ -373,7 +382,8 @@ let push ~root ~msg server =
   let msg = sprintf "[%s] dog push" in
   with_store ~root msg (fun _ t ->
       let config = Irmin_http.config server in
-      Irmin.create remote_store config task >>= fun remote ->
+      let tag = Irmin.tag_exn t in
+      Irmin.of_tag remote_store config task tag >>= fun remote ->
       let files = rec_files ~keep root in
       Irmin.with_hrw_view t `Update (update_files files) >>=
       Irmin.Merge.exn >>= fun () ->
@@ -383,34 +393,74 @@ let push ~root ~msg server =
 
 let str t fmt = Printf.ksprintf (fun str -> t str) fmt
 
+let timestamp () =
+  let ts = Unix.gettimeofday() in
+  let tm = Unix.localtime ts in
+  let us, _s = modf ts in
+  let ts =
+    Printf.sprintf "%04d-%02d-%02d %02d:%02d:%02d.%03d "
+    (1900 + tm.Unix.tm_year)
+    (1    + tm.Unix.tm_mon)
+    (tm.Unix.tm_mday)
+    (tm.Unix.tm_hour)
+    (tm.Unix.tm_min)
+    (tm.Unix.tm_sec)
+    (int_of_float (1_000. *. us))
+  in
+  file (Cstruct.of_string ts)
+
 let listen ~root =
   let config =
     Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()
   in
   Irmin.create base_store config task >>= fun t ->
   Irmin.tags (t "Getting tags") >>= fun clients ->
-  with_store ~root (fun _ -> "dog listen") (fun merges _ ->
+  printf "Current clients: %s\n%!" (String.concat " " clients);
+  with_store ~root (fun _ -> "dog listen") (fun merges main ->
       let module Conf = struct let merges = merges end in
       let module File = File (Conf) in
       let module Server = Irmin.Basic (Irmin_git.FS) (File) in
       let module HTTP = Irmin_http_server.Make(Server) in
       Server.create config task >>= fun t ->
+      Server.update (t "Starting the server") [".started"] (timestamp ())
+      >>= fun () ->
       let listen () =
-        HTTP.listen (t "Listen") (Uri.of_string "http://localhost:1234")
+        HTTP.listen (t "Listen") (Uri.of_string "http://localhost:8080")
       in
+      let clients_ref = ref [] in
       let watch client =
-        Irmin.of_tag base_store config task client >>= fun c ->
-        let stream =
-          Irmin.watch_head (str c "Watching changes for client %s" client) []
-        in
-        Lwt_stream.iter_s (fun (_path, head) ->
-            Server.merge_head (str t "Merging %s's changes" client) head
-            >>= function
-            | `Ok () -> Lwt.return_unit
-            | `Conflict c ->
-              Log.error "Cannot merge %s: %s" client c;
-              Lwt.return_unit
-          ) stream
+        if List.mem client !clients_ref then Lwt.return_unit
+        else (
+          printf "new client: %s\n!" client;
+          clients_ref := client :: !clients_ref;
+          Irmin.of_tag base_store config task client >>= fun c ->
+          let stream =
+            Irmin.watch_head (str c "Watching changes for client %s" client) []
+          in
+          Lwt_stream.iter_s (fun (_path, head) ->
+              printf "got some changes for %s\n%!" client;
+              match head with
+              | None   -> (* FIXME: handle client erasure *) Lwt.return_unit
+              | Some h ->
+                Server.merge_head (str t "Merging %s's changes" client) ~n:1 h
+                >>= function
+                | `Ok () -> Lwt.return_unit
+                | `Conflict c ->
+                  Log.error "Cannot merge %s: %s" client c;
+                  Lwt.return_unit
+            ) stream
+        )
       in
-      Lwt.join (listen () :: List.map watch clients)
+      let watch_new () =
+        let stream = Irmin.watch_tags main in
+        Lwt_stream.iter (fun (client, value) ->
+            printf "got some global changes (%s)\n%!" client;
+            match value with
+            | None   -> (* FIXME: stop watchers for this client *) printf "XXX\n%!";
+            | Some _ -> Lwt.async (fun () -> watch client)
+          ) stream
+
+      in
+      install_dir_polling_listener 1.;
+      Lwt.join (listen () :: watch_new () :: List.map watch clients)
     )
