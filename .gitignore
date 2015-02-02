@@ -1,3 +1,11 @@
 *~
+\#*
+.#*
 _build/
 lib_test/_tests/
+test.native
+setup.data
+setup.log
+main.native
+bin/version.ml
+_tests

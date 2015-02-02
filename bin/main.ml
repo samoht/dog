@@ -109,7 +109,7 @@ let init = {
         Arg.info ~docv:"NAME" ~doc:"The client name." [] in
       Arg.(required & pos 0 (some string) None & doc)
     in
-    let init root name = run (Dog.init ~root name) in
+    let init root name = run (Dog_client.init ~root name) in
     Term.(mk init $ root $ client_name)
 }
 
@@ -131,7 +131,7 @@ let push = {
     in
     let push root msg server =
       let server = Uri.of_string server in
-      run (Dog.push ~root ~msg server)
+      run (Dog_client.push ~root ~msg server)
     in
     Term.(mk push $ root $ msg $ server);
 }

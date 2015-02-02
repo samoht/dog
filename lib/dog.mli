@@ -16,6 +16,8 @@
 
 (** The Dog API. *)
 
+open Dog_misc
+
 (** {1 Merge Strategies} *)
 
 type merge =
@@ -72,9 +74,6 @@ val check: pattern -> (string -> bool)
 type merges = (pattern * merge) list
 (** FIXME *)
 
-type path = string list
-(** FIXME *)
-
 val merge: merges -> path -> merge
 (** FIXME *)
 
@@ -102,17 +101,11 @@ type t = ([`BC], path, file) Irmin.t
 (** The type for Dog stores. *)
 
 val with_store:
-  root:string -> (string -> string) -> ((unit -> merges Lwt.t) -> t -> 'a Lwt.t) -> 'a Lwt.t
+  root:string -> ((unit -> merges Lwt.t) -> (string -> t) -> string -> 'a Lwt.t) -> 'a Lwt.t
 (** [with_store ~root msg f] loads the configuration stored in
     {!conf_path} and apply the function [f] to the resulting
     store. Use [msg] as commit message if necessary. The [msg]
     function takes the current branch bame as parameter. *)
-
-val init: root:string -> string -> unit Lwt.t
-(** FIXME *)
-
-val push: root:string -> msg:string -> Uri.t -> unit Lwt.t
-(** FIXME *)
 
 val listen: root:string -> unit Lwt.t
 (** FIXME *)

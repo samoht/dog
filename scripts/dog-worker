@@ -31,6 +31,28 @@ let append_file ~file contents =
   output_string oc contents;
   close_out oc
 
+module StringSet = Set.Make(String)
+
+let add_line ~file line =
+  if Sys.file_exists file then
+    let ic = open_in file in
+    let rec lines acc =
+      let line =
+        try
+          let line = input_line ic in
+          Some line
+        with End_of_file ->
+          None
+      in
+      match line with
+      | None   -> acc
+      | Some l -> lines (StringSet.add l acc)
+    in
+    let lines = StringSet.add line (lines StringSet.empty) in
+    output_file ~file (String.concat "\n" (StringSet.elements lines) ^ "\n")
+  else
+    output_file ~file (line ^ "\n")
+
 let append ~file str =
   append_file ~file (str ^ "\n")
 
@@ -90,7 +112,7 @@ let arch, server =
 
 let () =
   command "dog init %s" arch;
-  append_file ".merge" (sprintf "%s/* append\n" arch);
+  add_line ".merge" (sprintf "%s/* append" arch);
   while true do
     push arch server;
     Unix.sleep 1

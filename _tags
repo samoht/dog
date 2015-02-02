@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 0b4dada5f5d07cb80e1619af80c46f81)
+# DO NOT EDIT (digest: 6fbf2ae9daff81f92025045b3f710df5)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -20,21 +20,18 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_irmin.unix
 <lib/*.ml{,i,y}>: pkg_lwt
 <lib/*.ml{,i,y}>: pkg_re.glob
-<lib/*.ml{,i,y}>: pkg_toml
 # Executable dog
 <bin/main.{native,byte}>: pkg_cmdliner
 <bin/main.{native,byte}>: pkg_dolog
 <bin/main.{native,byte}>: pkg_irmin.unix
 <bin/main.{native,byte}>: pkg_lwt
 <bin/main.{native,byte}>: pkg_re.glob
-<bin/main.{native,byte}>: pkg_toml
 <bin/main.{native,byte}>: use_dog
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_dolog
 <bin/*.ml{,i,y}>: pkg_irmin.unix
 <bin/*.ml{,i,y}>: pkg_lwt
 <bin/*.ml{,i,y}>: pkg_re.glob
-<bin/*.ml{,i,y}>: pkg_toml
 <bin/*.ml{,i,y}>: use_dog
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
@@ -42,13 +39,14 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: pkg_irmin.unix
 <lib_test/test.{native,byte}>: pkg_lwt
 <lib_test/test.{native,byte}>: pkg_re.glob
-<lib_test/test.{native,byte}>: pkg_toml
 <lib_test/test.{native,byte}>: use_dog
 <lib_test/*.ml{,i,y}>: pkg_alcotest
 <lib_test/*.ml{,i,y}>: pkg_dolog
 <lib_test/*.ml{,i,y}>: pkg_irmin.unix
 <lib_test/*.ml{,i,y}>: pkg_lwt
 <lib_test/*.ml{,i,y}>: pkg_re.glob
-<lib_test/*.ml{,i,y}>: pkg_toml
 <lib_test/*.ml{,i,y}>: use_dog
 # OASIS_STOP
+true: bin_annot, debug
+true: warn_error_A, warn(A-4-41-44-48)
+true: short_paths
