@@ -131,6 +131,9 @@ module type CONF = sig
   val merges: unit -> merges Lwt.t
 end
 
+let show fmt =
+  Printf.ksprintf (fun str -> Printf.printf "%s\n%!" str) fmt
+
 module File (Conf: CONF) = struct
 
   module Path = Irmin.Path.String_list
@@ -155,16 +158,17 @@ module File (Conf: CONF) = struct
 
   open Irmin.Merge.OP
 
-  let show fmt =
-    Printf.ksprintf (fun str -> Printf.printf "%s\n" (green_s str)) fmt
-
   let merge_ignore p ~old:_ _ _ =
-    show "IGNORE  %s" (path p);
+    show "%s  %s" (green_s "IGNORE") (path p);
     ok None
 
-  let merge_replace p ~old:_ _ y =
-    show "REPLACE %s" (path p);
-    ok y
+  let pr = function
+    | None   -> "<none>"
+    | Some x -> Cstruct.to_string x.buf
+
+  let merge_replace p ~old:_ old_x new_x =
+    show "%s %s old:%s new:%s" (green_s "REPLACE") (path p) (pr old_x) (pr new_x);
+    ok new_x
 
   let merge_set _ ~old:_ _ _= failwith "TODO"
   let merge_append _ ~old:_ _ _ = failwith "TODO"
@@ -205,82 +209,81 @@ let with_store ~root fn =
   let tag = Irmin.tag_exn (t "Getting the branch name") in
   fn Conf.merges t tag
 
-let timestamp () =
-  let ts = Unix.gettimeofday() in
-  let tm = Unix.localtime ts in
-  let us, _s = modf ts in
-  let ts =
-    Printf.sprintf "%04d-%02d-%02d %02d:%02d:%02d.%03d "
-    (1900 + tm.Unix.tm_year)
-    (1    + tm.Unix.tm_mon)
-    (tm.Unix.tm_mday)
-    (tm.Unix.tm_hour)
-    (tm.Unix.tm_min)
-    (tm.Unix.tm_sec)
-    (int_of_float (1_000. *. us))
-  in
-  file (Cstruct.of_string ts)
 
 let str t fmt = Printf.ksprintf (fun str -> t str) fmt
 
-let listen ~root =
-  let config =
-    Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()
+type 'a s = (module Irmin.S with type t = 'a
+                             and type key = Dog_misc.path
+                             and type value = file)
+
+let config ~root =
+  Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()
+
+let merge_subtree config c client =
+  let proj (type t) (m: t s) (t:t) =
+    let (module S) = m in
+    let module V = Irmin.View(S) in
+    V.of_path t [] >>= fun view ->
+    S.create config task >>= fun master ->
+    V.merge_path (str master "Merging %s's changes" client) ~n:1 [client] view
   in
+  Irmin.with_store (c "with_store") { Irmin.proj }
+
+let listen ~root =
+  let config = config ~root in
   Irmin.create base_store config task >>= fun t ->
   Irmin.tags (t "Getting tags") >>= fun clients ->
-  printf "Current clients: %s\n%!" (String.concat " " clients);
+  let clients = List.filter ((<>)"master") clients in
+  let () = match clients with
+    | []  -> ()
+    | [c] -> show "Existing client: %s" c
+    | _   -> show "Existing client(s): %s\n%!"
+               (String.concat " " (List.map Dog_misc.blue_s clients))
+  in
   with_store ~root (fun merges t _ ->
       let module Conf = struct let merges = merges end in
       let module File = File (Conf) in
+      let store = Irmin.basic (module Irmin_git.FS) (module File) in
       let module Server = Irmin.Basic (Irmin_git.FS) (File) in
       let module HTTP = Irmin_http_server.Make(Server) in
-      Irmin.update (t "Starting the server") [".started"] (timestamp ())
-      >>= fun () ->
+      let ts = file (Cstruct.of_string (Dog_misc.timestamp ())) in
+      Irmin.update (t "Starting the server") [".started"] ts >>= fun () ->
       let listen () =
         Server.create config task >>= fun s ->
         HTTP.listen (s "Listen") (Uri.of_string "http://localhost:8080")
       in
       let clients_ref = ref [] in
       let watch client =
-        let merge head =
-          match head with
-          | None   -> (* FIXME: handle client erasure *) Lwt.return_unit
-          | Some h ->
-            Irmin.merge_head (str t "Merging %s's changes" client) ~n:1 h
-            >>= function
+        if client = "master" then Lwt.return_unit
+        else (
+          show "Listening to a new client: %s." (Dog_misc.blue_s client);
+          clients_ref := client :: !clients_ref;
+          Irmin.of_tag store config task client >>= fun c ->
+          let merge () =
+            merge_subtree config c client >>= function
             | `Ok ()      -> Lwt.return_unit
             | `Conflict c ->
               Log.error "Cannot merge %s: %s" client c;
               Lwt.return_unit
-        in
-        if List.mem client !clients_ref then Lwt.return_unit
-        else (
-          printf "new client: %s\n!" client;
-          clients_ref := client :: !clients_ref;
-
-          Irmin.of_tag base_store config task client >>= fun c ->
-          Irmin.head (c "head") >>= fun head ->
-          merge head >>= fun () ->
-
+          in
+          merge () >>= fun () ->
           let stream =
             Irmin.watch_head (str c "Watching changes for client %s" client) []
           in
-          Lwt_stream.iter_s (fun (_path, head) ->
-              printf "got some changes for %s\n%!" client;
-              merge head
-            ) stream
-        )
+          Lwt_stream.iter_s (fun (_path, _head) ->
+              show "Got some changes for %s." (Dog_misc.green_s client);
+              merge ()
+            ) stream)
       in
       let watch_new () =
         let stream = Irmin.watch_tags (t "Watching tags") in
         Lwt_stream.iter (fun (client, value) ->
-            printf "got some global changes (%s)\n%!" client;
             match value with
             | None   -> (* FIXME: stop watchers for this client *) ()
-            | Some _ -> Lwt.async (fun () -> watch client)
+            | Some _ ->
+              if client = "master" || List.mem client !clients_ref then ()
+              else Lwt.async (fun () -> watch client)
           ) stream
-
       in
       install_dir_polling_listener 1.;
       Lwt.join (listen () :: watch_new () :: List.map watch clients)

@@ -73,11 +73,11 @@ let mkdir dir =
   if Sys.file_exists dir then ()
   else Unix.mkdir dir 0o755
 
-let add_log arch =
-  let file = sprintf "%s/build.log" arch in
+let add_log () =
+  let file = "log/build.log" in
   mkdir (Filename.dirname file);
   let line = sprintf "%s %S" (timestamp ()) (Bytes.create 48) in
-  append ~file line
+  output_file ~file line
 
 let add_result arch result =
   let file = "result.log" in
@@ -96,9 +96,9 @@ let command fmt =
     ) fmt
 
 let push arch server =
-  add_log arch;
-  add_log arch;
-  add_log arch;
+  add_log ();
+  add_log ();
+  add_log ();
   let result = if Random.int 10 = 0 then `Error else `Ok in
   add_result arch result;
   command "dog push %s -m \"Updates from %s\"" server arch
@@ -112,7 +112,6 @@ let arch, server =
 
 let () =
   command "dog init %s" arch;
-  add_line ".merge" (sprintf "%s/* append" arch);
   while true do
     push arch server;
     Unix.sleep 1

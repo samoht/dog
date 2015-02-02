@@ -90,13 +90,21 @@ let update_files files view =
       Irmin.update view path (of_path path)
     ) files
 
-let push ~root ~msg server =
+let push ~root ~msg ?watch server =
   let config = Irmin_http.config server in
   Dog_misc.(mk_store base_store ~root) >>= fun t ->
   let tag = Irmin.tag_exn (t "tag") in
   Irmin.of_tag remote_store config Dog_misc.task tag >>= fun remote ->
-  let files = rec_files ~keep root in
-  Irmin.with_hrw_view (t msg) `Update (update_files files) >>=
-  Irmin.Merge.exn >>= fun () ->
-  let remote = Irmin.remote_basic (remote "dog push") in
-  Irmin.push_exn (t msg) remote
+  let rec aux () =
+    let files = rec_files ~keep root in
+    Irmin.with_hrw_view (t msg) `Update (update_files files) >>=
+    Irmin.Merge.exn >>= fun () ->
+    let remote = Irmin.remote_basic (remote "dog push") in
+    Irmin.push_exn (t msg) remote >>= fun () ->
+    match watch with
+    | None   -> Lwt.return_unit
+    | Some d ->
+      Lwt_unix.sleep d >>= fun () ->
+      aux ()
+  in
+  aux ()
