@@ -212,22 +212,19 @@ let with_store ~root fn =
 
 let str t fmt = Printf.ksprintf (fun str -> t str) fmt
 
-type 'a s = (module Irmin.S with type t = 'a
-                             and type key = Dog_misc.path
-                             and type value = file)
+module type S = Irmin.BASIC with type key = string list
+                             and type value = file
 
 let config ~root =
   Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()
 
-let merge_subtree config c client =
-  let proj (type t) (m: t s) (t:t) =
-    let (module S) = m in
-    let module V = Irmin.View(S) in
-    V.of_path t [] >>= fun view ->
-    S.create config task >>= fun master ->
-    V.merge_path (str master "Merging %s's changes" client) ~n:1 [client] view
-  in
-  Irmin.with_store (c "with_store") { Irmin.proj }
+let merge_subtree t config client =
+  let (module M: S) = Irmin.impl (t "") in
+  let module V = Irmin.View(M) in
+  M.of_tag config task client >>= fun t ->
+  V.of_path (t "Create view") [] >>= fun view ->
+  M.create config task >>= fun master ->
+  V.merge_path (str master "Merging %s's changes" client) ~n:1 [client] view
 
 let listen ~root =
   let config = config ~root in
@@ -243,7 +240,6 @@ let listen ~root =
   with_store ~root (fun merges t _ ->
       let module Conf = struct let merges = merges end in
       let module File = File (Conf) in
-      let store = Irmin.basic (module Irmin_git.FS) (module File) in
       let module Server = Irmin.Basic (Irmin_git.FS) (File) in
       let module HTTP = Irmin_http_server.Make(Server) in
       let ts = file (Cstruct.of_string (Dog_misc.timestamp ())) in
@@ -258,15 +254,16 @@ let listen ~root =
         else (
           show "Listening to a new client: %s." (Dog_misc.blue_s client);
           clients_ref := client :: !clients_ref;
-          Irmin.of_tag store config task client >>= fun c ->
           let merge () =
-            merge_subtree config c client >>= function
+            merge_subtree t config client >>= function
             | `Ok ()      -> Lwt.return_unit
             | `Conflict c ->
               Log.error "Cannot merge %s: %s" client c;
               Lwt.return_unit
           in
           merge () >>= fun () ->
+          let store = Irmin.basic (module Irmin_git.FS) (module File) in
+          Irmin.of_tag store config task client >>= fun c ->
           let stream =
             Irmin.watch_head (str c "Watching changes for client %s" client) []
           in

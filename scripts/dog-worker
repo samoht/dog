@@ -76,7 +76,7 @@ let mkdir dir =
 let add_log () =
   let file = "log/build.log" in
   mkdir (Filename.dirname file);
-  let line = sprintf "%s %S" (timestamp ()) (Bytes.create 48) in
+  let line = sprintf "%s" (timestamp ()) in
   output_file ~file line
 
 let add_result arch result =
