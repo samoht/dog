@@ -59,7 +59,7 @@ let simple_merges () =
   let check x y = assert_bool (String.concat "/" x) (Dog.merge merges x = y) in
   check ["foo"] `Set;
   check ["foo"; ""] `Replace;
-  check ["fo"]  `Ignore
+  check ["fo"]  `Replace
 
 let simple_dot_merges () =
   let str = Dog.string_of_merges merges in

@@ -49,6 +49,7 @@ let add_line ~file line =
       | Some l -> lines (StringSet.add l acc)
     in
     let lines = StringSet.add line (lines StringSet.empty) in
+    close_in ic;
     output_file ~file (String.concat "\n" (StringSet.elements lines) ^ "\n")
   else
     output_file ~file (line ^ "\n")

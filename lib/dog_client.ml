@@ -79,11 +79,12 @@ let rec_files ?(keep=fun _ -> true) root =
 let keep = function ".git" -> false | _ -> true
 
 let of_path p =
-    let file = Dog_misc.path p in
-    let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
-    let ba = Bigarray.(Array1.map_file fd char c_layout false (-1)) in
-    Unix.close fd;
-    Cstruct.to_string (Cstruct.of_bigarray ba)
+  let file = Dog_misc.path p in
+  let ic = open_in file in
+  let len = in_channel_length ic in
+  let buf = really_input_string ic len in
+  close_in ic;
+  buf
 
 let update_files files view =
   Lwt_list.iter_s (fun path ->

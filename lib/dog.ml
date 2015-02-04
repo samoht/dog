@@ -226,6 +226,8 @@ let merge_subtree t config client =
   M.create config task >>= fun master ->
   V.merge_path (str master "Merging %s's changes" client) ~n:1 [client] view
 
+module StringSet = Set.Make(String)
+
 let listen ~root =
   let config = config ~root in
   Irmin.create base_store config task >>= fun t ->
@@ -242,18 +244,19 @@ let listen ~root =
       let module File = File (Conf) in
       let module Server = Irmin.Basic (Irmin_git.FS) (File) in
       let module HTTP = Irmin_http_server.Make(Server) in
+
       let ts = file (Cstruct.of_string (Dog_misc.timestamp ())) in
       Irmin.update (t "Starting the server") [".started"] ts >>= fun () ->
-      let listen () =
-        Server.create config task >>= fun s ->
-        HTTP.listen (s "Listen") (Uri.of_string "http://localhost:8080")
-      in
-      let clients_ref = ref [] in
+
+      let clients = ref StringSet.empty in
+      let merge_hooks = ref [] in
+
       let watch client =
-        if client = "master" then Lwt.return_unit
+        if client = "master" || StringSet.mem client !clients then
+          Lwt.return_unit
         else (
           show "Listening to a new client: %s." (Dog_misc.blue_s client);
-          clients_ref := client :: !clients_ref;
+          clients := StringSet.add client !clients;
           let merge () =
             merge_subtree t config client >>= function
             | `Ok ()      -> Lwt.return_unit
@@ -262,26 +265,37 @@ let listen ~root =
               Lwt.return_unit
           in
           merge () >>= fun () ->
-          let store = Irmin.basic (module Irmin_git.FS) (module File) in
-          Irmin.of_tag store config task client >>= fun c ->
-          let stream =
-            Irmin.watch_head (str c "Watching changes for client %s" client) []
-          in
-          Lwt_stream.iter_s (fun (_path, _head) ->
-              show "Got some changes for %s." (Dog_misc.green_s client);
-              merge ()
-            ) stream)
+          merge_hooks := (client, merge) :: !merge_hooks;
+          Lwt.return_unit
+        )
       in
+
+      let unwatch client =
+        if client = "master" || not (StringSet.mem client !clients) then
+          ()
+        else (
+          show "Stop listening to %s." (Dog_misc.blue_s client);
+          clients := StringSet.remove client !clients;
+          merge_hooks := List.filter (fun (c,_) -> c <> client) !merge_hooks;
+        )
+      in
+
       let watch_new () =
-        let stream = Irmin.watch_tags (t "Watching tags") in
-        Lwt_stream.iter (fun (client, value) ->
-            match value with
-            | None   -> (* FIXME: stop watchers for this client *) ()
-            | Some _ ->
-              if client = "master" || List.mem client !clients_ref then ()
-              else Lwt.async (fun () -> watch client)
-          ) stream
+        Irmin.tags (t "tags") >>= fun current_clients ->
+        let current_clients = StringSet.of_list current_clients in
+        let new_clients = StringSet.diff current_clients !clients in
+        let del_clients = StringSet.diff !clients current_clients in
+        StringSet.iter unwatch del_clients;
+        Lwt_list.iter_s watch (StringSet.elements new_clients)
       in
+
+      let hooks = {
+        Irmin_http_server.update = fun () ->
+          watch_new () >>= fun () ->
+          Lwt_list.iter_s (fun (_, m) -> m ()) !merge_hooks
+      } in
+
       install_dir_polling_listener 1.;
-      Lwt.join (listen () :: watch_new () :: List.map watch clients)
+      Server.create config task >>= fun s ->
+      HTTP.listen (s "Listen") ~hooks (Uri.of_string "http://localhost:8080")
     )

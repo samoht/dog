@@ -61,7 +61,9 @@ let task msg =
       if i <> 0 then Printf.sprintf "%s.[%d]" (Unix.gethostname()) (Unix.getpid())
       else
         let ic = open_in tmp in
-        input_line ic
+        let line = input_line ic in
+        close_in ic;
+        line
     in
     Sys.remove tmp;
     name
