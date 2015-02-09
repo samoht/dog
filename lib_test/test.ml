@@ -32,7 +32,7 @@ let simple_merge () =
   check `Replace;
   check `Set;
   check `Append;
-  check `Jsonx;
+  check `Json;
   neg_check "foo";
   neg_check "bar"
 

@@ -25,7 +25,7 @@ type merge =
   | `Replace
   | `Set
   | `Append
-  | `Jsonx ]
+  | `Json ]
 (** The different merge strategies.
 
     {ul
@@ -33,7 +33,7 @@ type merge =
     {- [Replace] replaces the server file by the client one.}
     {- [Set] adds the client lines to the server files.}
     {- [Append] appends lines at the end of the server files.}
-    {- [Jsonx] considers the file as a JSON value and merge the value on
+    {- [Json] considers the file as a JSON value and merge the value on
     the server with the client version. The `x` stands for the special
     merge semantics that we use: records are considered as k/v maps and
     are merged as follow: if the key exists on both the client and the

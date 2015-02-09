@@ -18,32 +18,33 @@ open Printf
 open Irmin_unix
 open Dog_misc
 let (>>=) = Lwt.bind
+module StringSet = Set.Make(String)
 
 type merge =
   [ `Ignore
   | `Replace
   | `Set
   | `Append
-  | `Jsonx ]
+  | `Json ]
 
 let string_of_merge = function
-  | `Ignore -> "ignore"
+  | `Ignore  -> "ignore"
   | `Replace -> "replace"
-  | `Set -> "set"
-  | `Append -> "append"
-  | `Jsonx -> "jsonx"
+  | `Set     -> "set"
+  | `Append  -> "append"
+  | `Json    -> "json"
 
 let all_merges =
-  let all = [ `Ignore; `Replace; `Set; `Append; `Jsonx ] in
+  let all = [ `Ignore; `Replace; `Set; `Append; `Json ] in
   sprintf "{ %s }" (Dog_misc.pretty_list (List.map string_of_merge all))
 
 let merge_of_string = function
-  | "ignore" -> Some `Ignore
+  | "ignore"  -> Some `Ignore
   | "replace" -> Some `Replace
-  | "set" -> Some `Set
-  | "append" -> Some `Append
-  | "jsonx" -> Some `Jsonx
-  | _ -> None
+  | "set"     -> Some `Set
+  | "append"  -> Some `Append
+  | "json"    -> Some `Json
+  | _         -> None
 
 let merge_of_string_exn x =
   match merge_of_string x with
@@ -126,6 +127,7 @@ type file = {
 
 let digest buf = Digest.string (Cstruct.to_string buf)
 let file buf = { buf; digest = digest buf }
+let empty_file = file (Cstruct.of_string "")
 
 module type CONF = sig
   val merges: unit -> merges Lwt.t
@@ -158,32 +160,56 @@ module File (Conf: CONF) = struct
 
   open Irmin.Merge.OP
 
-  let merge_ignore p ~old:_ _ _ =
-    show "%s  %s" (green_s "IGNORE") (path p);
-    ok None
+  let merge_ignore: file option Irmin.Merge.t =
+    fun ~old:_ _ _ -> ok None
 
-  let pr = function
+  let _pr = function
     | None   -> "<none>"
     | Some x -> Cstruct.to_string x.buf
 
-  let merge_replace p ~old:_ old_x new_x =
-    show "%s %s old:%s new:%s" (green_s "REPLACE") (path p) (pr old_x) (pr new_x);
-    ok new_x
+  let merge_replace: file option Irmin.Merge.t =
+    fun ~old:_ _ x -> ok x
 
-  let merge_set _ ~old:_ _ _= failwith "TODO"
-  let merge_append _ ~old:_ _ _ = failwith "TODO"
-  let merge_jsonx _ ~old:_ _ _ = failwith "TODO"
+  let to_lines file =
+    let buf = Mstruct.of_cstruct file.buf in
+    let rec lines acc =
+      match Mstruct.get_string_delim buf '\n' with
+      | None   -> acc
+      | Some l -> lines (StringSet.add l acc)
+    in
+    lines StringSet.empty
+
+  let of_lines lines =
+    match StringSet.elements lines with
+    | [] -> None
+    | l  ->
+      let buf = Cstruct.of_string (String.concat "\n" l) in
+      Some (file buf)
+
+  let merge_set: file option Irmin.Merge.t =
+    fun ~old:_ (x:file option) y ->
+      let mk = function None -> empty_file | Some x -> x in
+      let x = mk x and y = mk y in
+      StringSet.union (to_lines x) (to_lines y)
+      |> of_lines
+      |> ok
+
+  let merge_append: file option Irmin.Merge.t =
+    fun ~old:_ _ _ -> failwith "merge_append: TODO"
+
+  let merge_json: file option Irmin.Merge.t =
+    fun ~old:_ _ _ -> failwith "merge_json: TODO"
 
   let merge path ~old x y =
     (* FIXME: cache the call? *)
     Conf.merges () >>= fun merges ->
     let merge =  merge merges path in
     match merge with
-    | `Ignore -> merge_ignore path ~old x y
-    | `Replace -> merge_replace path ~old x y
-    | `Set -> merge_set path ~old x y
-    | `Append -> merge_append path ~old x y
-    | `Jsonx -> merge_jsonx path ~old x y
+    | `Ignore  -> merge_ignore ~old x y
+    | `Replace -> merge_replace ~old x y
+    | `Set     -> merge_set ~old x y
+    | `Append  -> merge_append ~old x y
+    | `Json    -> merge_json ~old x y
 
 end
 
@@ -225,8 +251,6 @@ let merge_subtree t config client =
   V.of_path (t "Create view") [] >>= fun view ->
   M.create config task >>= fun master ->
   V.merge_path (str master "Merging %s's changes" client) ~n:1 [client] view
-
-module StringSet = Set.Make(String)
 
 let listen ~root =
   let config = config ~root in
