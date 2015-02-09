@@ -1,0 +1,146 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="next" href="Dog_client.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Dog" rel="Chapter" href="Dog.html">
+<link title="Dog_client" rel="Chapter" href="Dog_client.html">
+<link title="Dog_misc" rel="Chapter" href="Dog_misc.html"><link title="Merge Strategies" rel="Section" href="#1_MergeStrategies">
+<link title="Configurations" rel="Section" href="#1_Configurations">
+<link title="Files" rel="Section" href="#1_Files">
+<link title="Commands" rel="Section" href="#1_Commands">
+<title>Dog</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="Dog_client.html" title="Dog_client">Next</a>
+</div>
+<h1>Module <a href="type_Dog.html">Dog</a></h1>
+
+<pre><span class="keyword">module</span> Dog: <code class="code">sig</code> <a href="Dog.html">..</a> <code class="code">end</code></pre><div class="info module top">
+The Dog API.<br>
+</div>
+<hr width="100%">
+<br>
+<h1 id="1_MergeStrategies">Merge Strategies</h1><br>
+
+<pre><span id="TYPEmerge"><span class="keyword">type</span> <code class="type"></code>merge</span> = <code class="type">[ `Append | `Ignore | `Json | `Replace | `Set ]</code> </pre>
+<div class="info ">
+The different merge strategies.
+<p>
+
+    <ul>
+<li><code class="code">Ignore</code> skips the client file.</li>
+<li><code class="code">Replace</code> replaces the server file by the client one.</li>
+<li><code class="code">Set</code> adds the client lines to the server files.</li>
+<li><code class="code">Append</code> appends lines at the end of the server files.</li>
+<li><code class="code">Json</code> considers the file as a JSON value and merge the value on
+    the server with the client version. The `x` stands for the special
+    merge semantics that we use: records are considered as k/v maps and
+    are merged as follow: if the key exists on both the client and the
+    server, then merge the values together -- otherwise always add new
+    client keys. Arrays are considered as unordered sets. FIXME</li>
+</ul>
+<br>
+</div>
+
+
+<pre><span id="VALstring_of_merge"><span class="keyword">val</span> string_of_merge</span> : <code class="type"><a href="Dog.html#TYPEmerge">merge</a> -> string</code></pre><div class="info ">
+FIXME<br>
+</div>
+
+<pre><span id="VALmerge_of_string"><span class="keyword">val</span> merge_of_string</span> : <code class="type">string -> <a href="Dog.html#TYPEmerge">merge</a> option</code></pre><div class="info ">
+FIXME<br>
+</div>
+
+<pre><span id="VALmerge_of_string_exn"><span class="keyword">val</span> merge_of_string_exn</span> : <code class="type">string -> <a href="Dog.html#TYPEmerge">merge</a></code></pre><div class="info ">
+FIXME<br>
+</div>
+<br>
+<h1 id="1_Configurations">Configurations</h1><br>
+
+<pre><span id="TYPEpattern"><span class="keyword">type</span> <code class="type"></code>pattern</span> </pre>
+<div class="info ">
+The type for globs patterns.<br>
+</div>
+
+
+<pre><span id="VALpattern"><span class="keyword">val</span> pattern</span> : <code class="type">string -> [ `Error of string | `Ok of <a href="Dog.html#TYPEpattern">pattern</a> ]</code></pre><div class="info ">
+Create a pattern.<br>
+</div>
+
+<pre><span id="VALpattern_exn"><span class="keyword">val</span> pattern_exn</span> : <code class="type">string -> <a href="Dog.html#TYPEpattern">pattern</a></code></pre><div class="info ">
+Same as <a href="Dog.html#VALpattern"><code class="code">Dog.pattern</code></a> but raise <code class="code">Failure</code> in case of error.<br>
+</div>
+
+<pre><span id="VALcompare_pattern"><span class="keyword">val</span> compare_pattern</span> : <code class="type"><a href="Dog.html#TYPEpattern">pattern</a> -> <a href="Dog.html#TYPEpattern">pattern</a> -> int</code></pre><div class="info ">
+Pattern comparator.<br>
+</div>
+
+<pre><span id="VALstring_of_pattern"><span class="keyword">val</span> string_of_pattern</span> : <code class="type"><a href="Dog.html#TYPEpattern">pattern</a> -> string</code></pre><div class="info ">
+FIXME<br>
+</div>
+
+<pre><span id="VALcheck"><span class="keyword">val</span> check</span> : <code class="type"><a href="Dog.html#TYPEpattern">pattern</a> -> string -> bool</code></pre><div class="info ">
+Check a pattern.<br>
+</div>
+
+<pre><span id="TYPEmerges"><span class="keyword">type</span> <code class="type"></code>merges</span> = <code class="type">(<a href="Dog.html#TYPEpattern">pattern</a> * <a href="Dog.html#TYPEmerge">merge</a>) list</code> </pre>
+<div class="info ">
+FIXME<br>
+</div>
+
+
+<pre><span id="VALmerge"><span class="keyword">val</span> merge</span> : <code class="type"><a href="Dog.html#TYPEmerges">merges</a> -> <a href="Dog_misc.html#TYPEpath">Dog_misc.path</a> -> <a href="Dog.html#TYPEmerge">merge</a></code></pre><div class="info ">
+FIXME<br>
+</div>
+
+<pre><span id="VALdot_merge_file"><span class="keyword">val</span> dot_merge_file</span> : <code class="type"><a href="Dog_misc.html#TYPEpath">Dog_misc.path</a></code></pre><div class="info ">
+<code class="code">dot_merge</code> is <code class="code">[".merge"]</code>.<br>
+</div>
+
+<pre><span id="VALdefault_merges"><span class="keyword">val</span> default_merges</span> : <code class="type">(<a href="Dog.html#TYPEpattern">pattern</a> * <a href="Dog.html#TYPEmerge">merge</a>) list</code></pre><div class="info ">
+The default merge pattern is the rule <code class="code">dot_merge -&gt; `Set</code>.<br>
+</div>
+
+<pre><span id="VALstring_of_merges"><span class="keyword">val</span> string_of_merges</span> : <code class="type"><a href="Dog.html#TYPEmerges">merges</a> -> string</code></pre><div class="info ">
+FIXME<br>
+</div>
+
+<pre><span id="VALmerges_of_string"><span class="keyword">val</span> merges_of_string</span> : <code class="type">string -> <a href="Dog.html#TYPEmerges">merges</a></code></pre><div class="info ">
+FIXME<br>
+</div>
+<br>
+<h1 id="1_Files">Files</h1><br>
+
+<pre><span id="TYPEfile"><span class="keyword">type</span> <code class="type"></code>file</span> </pre>
+<div class="info ">
+The type for files.<br>
+</div>
+
+<br>
+<h1 id="1_Commands">Commands</h1><br>
+
+<pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> = <code class="type">([ `BC ], <a href="Dog_misc.html#TYPEpath">Dog_misc.path</a>, <a href="Dog.html#TYPEfile">file</a>) Irmin.t</code> </pre>
+<div class="info ">
+The type for Dog stores.<br>
+</div>
+
+
+<pre><span id="VALwith_store"><span class="keyword">val</span> with_store</span> : <code class="type">root:string -><br>       ((unit -> <a href="Dog.html#TYPEmerges">merges</a> Lwt.t) -> (string -> <a href="Dog.html#TYPEt">t</a>) -> string -> 'a Lwt.t) -><br>       'a Lwt.t</code></pre><div class="info ">
+<code class="code">with_store ~root msg f</code> loads the configuration stored in
+    <a href="Dog.html#VALdot_merge_file"><code class="code">Dog.dot_merge_file</code></a> and apply the function <code class="code">f</code> to the resulting
+    store. Use <code class="code">msg</code> as commit message if necessary. The <code class="code">msg</code>
+    function takes the current branch bame as parameter.<br>
+</div>
+
+<pre><span id="VALlisten"><span class="keyword">val</span> listen</span> : <code class="type">root:string -> unit Lwt.t</code></pre><div class="info ">
+FIXME<br>
+</div>
+</body></html>

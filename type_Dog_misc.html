@@ -1,0 +1,27 @@
+<html><head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Dog" rel="Chapter" href="Dog.html">
+<link title="Dog_client" rel="Chapter" href="Dog_client.html">
+<link title="Dog_misc" rel="Chapter" href="Dog_misc.html"><title>Dog_misc</title>
+</head>
+<body>
+<code class="code"><span class="keyword">sig</span><br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;green_s&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;red_s&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;yellow_s&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;blue_s&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;path&nbsp;=&nbsp;string&nbsp;list<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;path&nbsp;:&nbsp;string&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty_list&nbsp;:&nbsp;?last:string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mk_store&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>k,&nbsp;<span class="keywordsign">'</span>v)&nbsp;<span class="constructor">Irmin</span>.basic&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;root:string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;([&nbsp;<span class="keywordsign">`</span><span class="constructor">BC</span>&nbsp;],&nbsp;<span class="keywordsign">'</span>k,&nbsp;<span class="keywordsign">'</span>v)&nbsp;<span class="constructor">Irmin</span>.t)&nbsp;<span class="constructor">Lwt</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;base_store&nbsp;:&nbsp;(<span class="constructor">Dog_misc</span>.path,&nbsp;string)&nbsp;<span class="constructor">Irmin</span>.basic<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;timestamp&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;task&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Irmin</span>.task<br>
+<span class="keyword">end</span></code></body></html>
