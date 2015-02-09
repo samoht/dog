@@ -22,6 +22,7 @@ depends: [
   "lwt" {>= "2.4.5"}
   "irmin" {>= "0.9.3"}
   "git" {>= "1.4.10"}
+  "cohttp"
   "re"
   "dolog" {>= "1.0"}
   "cdmliner"
