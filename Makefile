@@ -44,7 +44,10 @@ $(VFILE): _oasis
 	echo "let current = \"$(VERSION)\"" > $@
 
 doc/html/.git:
-	cd doc/html && git init && git remote add origin git@github.com:samoht/dog.git
+	cd doc/html && (\
+	  git init &&\
+	  git remote add origin git@github.com:samoht/dog.git &&\
+	  git checkout -b gh-pages)
 
 gh-pages: doc/html/.git
 	cd doc/html && git checkout gh-pages
@@ -59,7 +62,7 @@ ARCHIVE = https://github.com/samoht/$(NAME)/archive/$(VERSION).tar.gz
 
 release:
 	git tag -a $(VERSION) -m "Version $(VERSION)."
-	git push upstream $(VERSION)
+	git push origin $(VERSION)
 	$(MAKE) pr
 
 pr:
