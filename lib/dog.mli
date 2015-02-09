@@ -103,7 +103,7 @@ type t = ([`BC], path, file) Irmin.t
 val with_store:
   root:string -> ((unit -> merges Lwt.t) -> (string -> t) -> string -> 'a Lwt.t) -> 'a Lwt.t
 (** [with_store ~root msg f] loads the configuration stored in
-    {!conf_path} and apply the function [f] to the resulting
+    {!dot_merge_file} and apply the function [f] to the resulting
     store. Use [msg] as commit message if necessary. The [msg]
     function takes the current branch bame as parameter. *)
 
