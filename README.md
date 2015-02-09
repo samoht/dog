@@ -31,7 +31,7 @@ the client files. The supported strategies are:
   common file prefix between the client and the server is not
   duplicated.
 
-  - `jsonx`: Consider the file as a JSON value and merge the value on
+  - `json`: Consider the file as a JSON value and merge the value on
   the server with the client version. The `x` stands for the special
   merge semantics that we use: records are considered as k/v maps and
   are merged as follow: if the key exists on both the client and the
