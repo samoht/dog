@@ -7,7 +7,7 @@ bug-reports:  "https://github.com/samoht/dog/issues"
 dev-repo:     "https://github.com/samoht/dog.git"
 
 build: [
-  ["./configure" "--prefix" prefix "--{alcotest:enable}-test"]
+  ["./configure" "--prefix" prefix "--%{alcotest:enable}%-tests"]
   [make]
 ]
 build-test: [
@@ -25,6 +25,6 @@ depends: [
   "cohttp"
   "re"
   "dolog" {>= "1.0"}
-  "cdmliner"
+  "cmdliner"
   "alcotest" {test}
 ]
