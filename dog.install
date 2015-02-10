@@ -1,0 +1,4 @@
+bin: [
+  "?_build/bin/main.byte" {"dog"}
+  "?_build/bin/main.native" {"dog"}
+]

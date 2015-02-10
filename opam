@@ -14,10 +14,7 @@ build-test: [
   [make "test"]
 ]
 install: [make "install"]
-remove: [
-  ["ocamlfind" "remove" "dog"]
-  ["rm" "-f" "%{bin}%/dog"]
-]
+remove: ["ocamlfind" "remove" "dog"]
 depends: [
   "lwt" {>= "2.4.5"}
   "irmin" {>= "0.9.3"}
