@@ -1,7 +1,7 @@
 OASISFormat: 0.4
 Name:        dog
 Version:     0.1.0
-Synopsis:    A loyal and A loyal and faithful synchronisation tool
+Synopsis:    A loyal and faithful synchronisation tool
 Authors:     Thomas Gazagnaire
 License:     ISC
 Plugins:     META (0.3), DevFiles (0.3)

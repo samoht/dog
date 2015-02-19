@@ -16,6 +16,7 @@ build-test: [
 install: [make "install"]
 remove: ["ocamlfind" "remove" "dog"]
 depends: [
+  "ocamlfind" {build}
   "lwt" {>= "2.4.5"}
   "irmin" {>= "0.9.3"}
   "git" {>= "1.4.10"}
