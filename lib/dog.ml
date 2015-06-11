@@ -18,7 +18,10 @@ open Printf
 open Irmin_unix
 open Dog_misc
 let (>>=) = Lwt.bind
-module StringSet = Set.Make(String)
+module StringSet = struct
+  include Set.Make(String)
+  let of_list l = List.fold_left (fun s e -> add e s) empty l
+end
 
 type merge =
   [ `Ignore
@@ -245,7 +248,9 @@ let config ~root =
   Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()
 
 let merge_subtree t config client =
-  let (module M: S) = Irmin.impl (t "") in
+  let (module M: Irmin.BASIC with type key = string list and type value = file) =
+    Irmin.impl (t "")
+  in
   let module V = Irmin.View(M) in
   M.of_tag config task client >>= fun t ->
   V.of_path (t "Create view") [] >>= fun view ->

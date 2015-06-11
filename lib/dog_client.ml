@@ -82,7 +82,8 @@ let of_path p =
   let file = Dog_misc.path p in
   let ic = open_in file in
   let len = in_channel_length ic in
-  let buf = really_input_string ic len in
+  let buf = Bytes.create len in
+  really_input ic buf 0 len;
   close_in ic;
   buf
 
