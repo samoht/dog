@@ -221,7 +221,9 @@ let dot_merge_file = [dot_merge]
 
 let raw_store = Dog_misc.mk_store base_store
 
-let with_store ~root fn =
+type 'a callback = (unit -> merges Lwt.t) -> (string -> t) -> string -> 'a Lwt.t
+
+let with_store ~root (fn:'a callback) =
   raw_store ~root >>= fun t ->
   let merges () =
     Irmin.read (t "Reading .merge") dot_merge_file >>= function
@@ -232,14 +234,12 @@ let with_store ~root fn =
   let module File = File (Conf) in
   let store = Irmin.basic (module Irmin_git.FS) (module File) in
   mk_store store ~root >>= fun t ->
-  let tag = Irmin.tag_exn (t "Getting the branch name") in
+  Irmin.tag_exn (t "Getting the branch name") >>= fun tag ->
   fn Conf.merges t tag
-
 
 let str t fmt = Printf.ksprintf (fun str -> t str) fmt
 
-module type S = Irmin.BASIC with type key = string list
-                             and type value = file
+module type S = Irmin.BASIC with type key = string list and type value = file
 
 let config ~root =
   Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()

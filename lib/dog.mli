@@ -100,12 +100,15 @@ type file
 type t = ([`BC], path, file) Irmin.t
 (** The type for Dog stores. *)
 
-val with_store:
-  root:string -> ((unit -> merges Lwt.t) -> (string -> t) -> string -> 'a Lwt.t) -> 'a Lwt.t
-(** [with_store ~root msg f] loads the configuration stored in
+type 'a callback = (unit -> merges Lwt.t) -> (string -> t) -> string -> 'a Lwt.t
+(** The type for store callbacks. A callback is a function taking the
+    store merges' parameters, a store handler and the store's current
+    tag as parameters. *)
+
+val with_store: root:string -> 'a callback -> 'a Lwt.t
+(** [with_store ~root f] loads the configuration stored in
     {!dot_merge_file} and apply the function [f] to the resulting
-    store. Use [msg] as commit message if necessary. The [msg]
-    function takes the current branch bame as parameter. *)
+    store.  *)
 
 val listen: root:string -> unit Lwt.t
 (** FIXME *)
