@@ -11,7 +11,7 @@ Library dog
   Path:              lib/
   Findlibname:       dog
   InternalModules:   Dog_misc
-  Modules:           Dog_listen, Dog_init
+  Modules:           Dog_listen, Dog_watch
   BuildDepends:      lwt, irmin.unix, re.glob, dolog
 
 Executable dog

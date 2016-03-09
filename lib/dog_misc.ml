@@ -75,10 +75,19 @@ let timestamp () =
     (tm.Unix.tm_sec)
     (int_of_float (1_000. *. us))
 
-let git_push ~root ~url ~branch =
-  let cmd = Printf.sprintf "cd %s && git push %s %s" root url branch in
+let git_push ~root ?(force=true) ?(branch="master") url =
+  (* FIXME: to replace by ocaml-git push at one point *)
+  let redirect = match Log.get_log_level () with
+    | Log.DEBUG | Log.INFO -> ""
+    | _ -> " > /dev/null 2>&1"
+  in
+  let force = if force then " --force" else "" in
+  let cmd =
+    Printf.sprintf "cd %s && git push %s %s%s%s" root url branch force redirect
+  in
   let i = Sys.command cmd in
-  if i <> 0 then failwith "git push failed"
+  if i <> 0 then failwith "git push failed";
+  Lwt.return_unit
 
 module Store = Irmin_unix.Irmin_git.FS
     (Irmin.Contents.String) (Irmin.Ref.String) (Irmin.Hash.SHA1)

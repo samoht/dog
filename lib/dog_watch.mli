@@ -14,4 +14,5 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-val cmd: root:string -> ?watch:float -> string -> string -> unit Lwt.t
+val cmd: root:string -> ?interval:float -> ?once:bool -> string -> string ->
+  unit Lwt.t

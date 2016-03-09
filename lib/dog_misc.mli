@@ -26,7 +26,8 @@ val pretty_list: ?last:string -> string list -> string
 val timestamp: unit -> string
 val task: string -> Irmin.task
 
-val git_push: root:string -> url:string -> branch:string -> unit
+val git_push: root:string -> ?force:bool -> ?branch:string ->
+  string -> unit Lwt.t
 
 module Store: Irmin.S
   with type commit_id = Irmin.Hash.SHA1.t

@@ -63,7 +63,6 @@ let rec_files ?(keep=fun _ -> true) root =
     List.fold_left aux (f @ accu) d in
   aux [] []
 
-
 let read_file p =
   let file = Dog_misc.path p in
   let ic = open_in file in
@@ -75,33 +74,51 @@ let read_file p =
 
 module View = Irmin.View(Store)
 
-let update_files t files =
-  View.of_path t [] >>= fun view ->
+let pretty_diff (f, d) =
+  let file = path f in
+  let diff = match d with
+    | `Added _   -> "+"
+    | `Updated _ -> "*"
+    | `Removed _ -> "-"
+  in
+  Printf.sprintf "%s /%s" diff file
+
+let pretty_diffs name diff =
+  let changes = String.concat "\n" @@ List.map pretty_diff diff in
+  Printf.sprintf "Changes from %s:\n\n%s" name changes
+
+let update_files name t files =
+  View.empty () >>= fun view ->
   Lwt_list.iter_s (fun path ->
       View.update view path (read_file path)
     ) files
   >>= fun () ->
-  View.update_path t [] view
+  View.of_path (t "view") [] >>= fun view0 ->
+  View.diff view0 view >>= function
+  | []    -> Lwt.return `Up_to_date
+  | files ->
+    let changes = pretty_diffs name files in
+    View.update_path (t changes) [] view >|= fun () ->
+    `Needs_update
 
 let keep = function ".git" -> false | _ -> true
 
-let cmd ~root ?watch name remote =
+let start_msg () =
+  Printf.sprintf "%s\n%dn" (timestamp ()) (Unix.getpid ())
+
+let cmd ~root ?(interval=1.) ?(once=false) name remote =
   let head = Git.Reference.of_raw ("refs/heads/" ^ name) in
   let config = Irmin_git.config ~root ~bare:false ~head () in
   Store.Repo.create config >>= fun repo ->
   Store.of_branch_id task name repo >>= fun t ->
-  begin Store.head (t "head") >>= function
-    | Some _ -> Lwt.return_unit
-    | None   -> Store.update (t "Initial commit") [".init"] (timestamp ())
-  end >>= fun () ->
+  Store.update (t "Initial commit") [".init"] (start_msg ()) >>= fun () ->
   let rec aux () =
     let files = rec_files ~keep root in
-    update_files (t "update files") files >>= fun () ->
-    git_push ~root ~url:remote ~branch:name;
-    match watch with
-    | None   -> Lwt.return_unit
-    | Some d ->
-      Lwt_unix.sleep d >>= fun () ->
-      aux ()
+    begin update_files name t files >>= function
+      | `Up_to_date   -> Lwt.return_unit
+      | `Needs_update -> git_push ~root ~branch:name remote
+    end >>= fun () ->
+    if once then Lwt.return_unit
+    else Lwt_unix.sleep interval >>= aux
   in
   aux ()

@@ -88,22 +88,28 @@ let client_name =
 
 let remote =
   let doc = Arg.info ~docv:"URI" ~doc:"The Git server URI." [] in
-  Arg.(required & pos 0 (some string) None & doc)
+  Arg.(required & pos 1 (some string) None & doc)
 
-let watch =
+let interval =
   let doc =
-    Arg.info ~docv:"SEC" ~doc:"Watch the directory and push the changes if any."
-      ["w";"watch"]
+    Arg.info ~docv:"SECS" ~doc:"Seconds to wait between updates."
+      ["n";"interval"]
   in
   Arg.(value & opt (some float) None & doc)
 
-(* INIT *)
-let init_doc = "Initialize a client."
-let init_cmd =
+let once =
+  let doc = Arg.info ~doc:"Watch for changes only once and exit." ["once"]in
+  Arg.(value &flag doc)
+
+(* WATCH *)
+let watch_doc = "Watch a directory."
+let watch_cmd =
   let man = [] in
-  let init watch root name remote = run (Dog_init.cmd ?watch ~root name remote) in
-  Term.(mk init $ watch $ root $ client_name $ remote),
-  term_info "init" ~doc:init_doc ~man
+  let watch once interval root name remote =
+    run (Dog_watch.cmd ~once ?interval ~root name remote)
+  in
+  Term.(mk watch $ once $ interval $ root $ client_name $ remote),
+  term_info "watch" ~doc:watch_doc ~man
 
 (* LISTEN *)
 let listen_doc = "Listen for incoming client connections"
@@ -151,11 +157,11 @@ let default_cmd =
       \           <command> [<args>]\n\
       \n\
       The most commonly used subcommands are:\n\
-      \    init        %s\n\
+      \    watch       %s\n\
       \    listen      %s\n\
       \n\
       See `dog help <command>` for more information on a specific command.\n%!"
-      init_doc listen_doc
+      watch_doc listen_doc
   in
   Term.(pure usage $ global),
   Term.info "dog"
@@ -166,7 +172,7 @@ let default_cmd =
 
 let cmds = [
     help_cmd;
-    init_cmd;
+    watch_cmd;
     listen_cmd;
   ]
 

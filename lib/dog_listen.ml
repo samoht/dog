@@ -21,79 +21,86 @@ module StringSet = Set.Make(String)
 module View = Irmin.View(Store)
 module Sync = Irmin.Sync(Store)
 
-let str t fmt = Printf.ksprintf (fun str -> t str) fmt
-
 let show fmt =
   Printf.ksprintf (fun str -> Printf.printf "%s\n%!" str) fmt
 
 let config ~root =
   Irmin_git.config ~root ~bare:false ~head:Git.Reference.master ()
 
-let merge_subtree repo client =
+let update_subtree repo client =
   Store.of_branch_id task client repo >>= fun t ->
-  View.of_path (t "Create view") [] >>= fun view ->
+  Store.head_exn (t "head") >>= fun head ->
+  (* XXX: small race here *)
+  View.of_path (t "client view") [] >>= fun client_view ->
   Store.master task repo >>= fun master ->
-  View.merge_path (str master "Merging %s's changes" client) ~n:1 [client] view
+  View.of_path (t "master view") [client] >>= fun master_view ->
+  View.diff client_view master_view >>= function
+  | [] -> Lwt.return_unit
+  | _  ->
+    let msg =
+      Printf.sprintf "Merge %s:%s" client (Irmin.Hash.SHA1.to_hum head)
+    in
+  (* XXX: small race again *)
+    View.update_path (master msg) [client] client_view
+
+type t = {
+  mutable clients    : StringSet.t;
+  mutable merge_hooks: (string * (unit -> unit Lwt.t)) list;
+}
+
+let empty () = { clients = StringSet.empty; merge_hooks = [] }
+
+let watch t repo client =
+  if client = "master" || StringSet.mem client t.clients then
+    Lwt.return_unit
+  else (
+    show "Listening to a new client: %s." (Dog_misc.blue_s client);
+    t.clients <- StringSet.add client t.clients;
+    let merge () = update_subtree repo client in
+    merge () >>= fun () ->
+    t.merge_hooks <- (client, merge) :: t.merge_hooks;
+    Lwt.return_unit
+  )
+
+let unwatch t client =
+  if client = "master" || not (StringSet.mem client t.clients) then
+    ()
+  else (
+    show "Stop listening to %s." (Dog_misc.blue_s client);
+    t.clients <- StringSet.remove client t.clients;
+    t.merge_hooks <- List.filter (fun (c,_) -> c <> client) t.merge_hooks;
+  )
+
+let watch_new t repo  =
+  Store.Repo.branches repo >>= fun current_clients ->
+  let current_clients = StringSet.of_list current_clients in
+  let new_clients = StringSet.diff current_clients t.clients in
+  let del_clients = StringSet.diff t.clients current_clients in
+  StringSet.iter (unwatch t) del_clients;
+  Lwt_list.iter_s (watch t repo) (StringSet.elements new_clients)
 
 let cmd ~root =
   Store.Repo.create (config ~root) >>= fun repo ->
   Store.master task repo >>= fun t ->
   Store.Repo.branches repo >>= fun clients ->
-  let clients = List.filter ((<>)"master") clients in
+  let clients = List.filter ((<>) "master") clients in
+  (* FIXME: can have multiple clients? maybe packed vs. loose
+     references *)
+  let clients = StringSet.of_list clients |> StringSet.elements in
   let () = match clients with
     | []  -> ()
-    | [c] -> show "Existing client: %s" c
+    | [c] -> show "Existing client: %s" @@ Dog_misc.blue_s c
     | _   -> show "Existing client(s): %s\n%!"
                (String.concat " " (List.map Dog_misc.blue_s clients))
   in
   let ts = Dog_misc.timestamp () in
   Store.update (t "Starting the server") [".started"] ts >>= fun () ->
-  let clients = ref StringSet.empty in
-  let merge_hooks = ref [] in
-
-  let watch client =
-    if client = "master" || StringSet.mem client !clients then
-      Lwt.return_unit
-    else (
-      show "Listening to a new client: %s." (Dog_misc.blue_s client);
-      clients := StringSet.add client !clients;
-      let merge () =
-        merge_subtree repo client >>= function
-        | `Ok ()      -> Lwt.return_unit
-        | `Conflict c ->
-          Log.error "Cannot merge %s: %s" client c;
-          Lwt.return_unit
-      in
-      merge () >>= fun () ->
-      merge_hooks := (client, merge) :: !merge_hooks;
-      Lwt.return_unit
-    )
-  in
-
-  let unwatch client =
-    if client = "master" || not (StringSet.mem client !clients) then
-      ()
-    else (
-      show "Stop listening to %s." (Dog_misc.blue_s client);
-      clients := StringSet.remove client !clients;
-      merge_hooks := List.filter (fun (c,_) -> c <> client) !merge_hooks;
-    )
-  in
-
-  let watch_new () =
-    Store.Repo.branches repo >>= fun current_clients ->
-    let current_clients = StringSet.of_list current_clients in
-    let new_clients = StringSet.diff current_clients !clients in
-    let del_clients = StringSet.diff !clients current_clients in
-    StringSet.iter unwatch del_clients;
-    Lwt_list.iter_s watch (StringSet.elements new_clients)
-  in
-
   Irmin_unix.install_dir_polling_listener 1.;
+  let state = empty () in
   let _unwatch =
     Store.Repo.watch_branches repo (fun _ _ ->
-        watch_new () >>= fun () ->
-        Lwt_list.iter_s (fun (_, m) -> m ()) !merge_hooks
+        watch_new state repo >>= fun () ->
+        Lwt_list.iter_s (fun (_, m) -> m ()) state.merge_hooks
       ) in
-
-  Lwt.return ()
+  let t, _ = Lwt.task () in
+  t
