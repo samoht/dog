@@ -14,22 +14,4 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-val green_s: string -> string
-val red_s: string -> string
-val yellow_s: string -> string
-val blue_s: string -> string
-
-type path = string list
-val path: string list -> string
-val pretty_list: ?last:string -> string list -> string
-
-val timestamp: unit -> string
-val task: string -> Irmin.task
-
-val git_push: root:string -> url:string -> branch:string -> unit
-
-module Store: Irmin.S
-  with type commit_id = Irmin.Hash.SHA1.t
-   and type branch_id = string
-   and type key = path
-   and type value = string
+val cmd: root:string -> ?watch:float -> string -> string -> unit Lwt.t

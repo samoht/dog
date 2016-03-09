@@ -7,23 +7,21 @@ bug-reports:  "https://github.com/samoht/dog/issues"
 dev-repo:     "https://github.com/samoht/dog.git"
 
 build: [
-  ["./configure" "--prefix" prefix]
+  [make "PREFIX=%{prefix}%"]
   [make]
 ]
 build-test: [
-  ["./configure" "--prefix" prefix "--enable-tests"]
   [make "test"]
 ]
 install: [make "install"]
 remove: ["ocamlfind" "remove" "dog"]
 depends: [
   "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "oasis" {build}
   "lwt" {>= "2.4.5"}
-  "irmin" {>= "0.9.5"}
+  "irmin" {>= "0.10.0"}
+  "irmin-unix"
   "git" {>= "1.4.10"}
-  "cohttp"
-  "re"
-  "dolog" {>= "1.0"}
   "cmdliner"
-  "alcotest" {test}
 ]

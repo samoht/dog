@@ -1,20 +1,31 @@
 VERSION = $(shell grep 'Version:' _oasis | sed 's/Version: *//')
 VFILE   = bin/version.ml
 SETUP   = ocaml setup.ml
+PREFIX ?= $(shell opam config var prefix)
 
-.PHONY: build doc test all install uninstall reinstall clean distclean configure
+.PHONY: build doc test all install uninstall reinstall clean distclean
+.PHONY: configure $(VFILE)
 
 build: setup.data $(VFILE)
 	$(SETUP) -build $(BUILDFLAGS)
 
+all: setup.data
+	$(SETUP) -all $(ALLFLAGS)
+
+setup.ml: _oasis
+	rm -f _tags myocamlbuild.ml
+	oasis setup
+	echo 'true: debug, bin_annot' >> _tags
+	echo 'true: warn_error(+1..49), warn(A-4-41-44)' >> _tags
+	echo 'Ocamlbuild_plugin.mark_tag_used "tests"' >> myocamlbuild.ml
+
 doc: setup.data build
 	$(SETUP) -doc $(DOCFLAGS)
 
-test: setup.data build
+test:
+	$(SETUP) -configure --enable-tests --prefix $(PREFIX)
+	$(MAKE) build
 	$(SETUP) -test $(TESTFLAGS)
-
-all:
-	$(SETUP) -all $(ALLFLAGS)
 
 install: setup.data
 	$(SETUP) -install $(INSTALLFLAGS)
@@ -25,22 +36,17 @@ uninstall: setup.data
 reinstall: setup.data
 	$(SETUP) -reinstall $(REINSTALLFLAGS)
 
-distclean:
-	$(SETUP) -distclean $(DISTCLEANFLAGS)
-
-setup.data:
-	$(SETUP) -configure $(CONFIGUREFLAGS)
-
-configure:
-	$(SETUP) -configure $(CONFIGUREFLAGS)
-
 clean:
-	$(SETUP) -clean $(CLEANFLAGS)
-	rm -f $(VFILE) $(SFILE)
-	rm -rf lib_test/_tests
-	rm -rf ./test-db
+	if [ -f setup.ml ]; then $(SETUP) -clean $(CLEANFLAGS); fi
+	rm -f setup.data setup.ml myocamlbuild.ml _tags configure
+	rm -f lib/*.odocl lib/META setup.log lib/*.mldylib lib/*.mllib
+	rm -f $(VFILE)
+	rm -rf _tests lib_test/_tests ./test-db
 
-$(VFILE): _oasis
+setup.data: setup.ml
+	$(SETUP) -configure --prefix $(PREFIX)
+
+$(VFILE):
 	echo "let current = \"$(VERSION)\"" > $@
 
 doc/html/.git:
