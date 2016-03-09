@@ -9,3 +9,4 @@ setup.log
 main.native
 bin/version.ml
 _tests
+doc
