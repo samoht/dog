@@ -14,5 +14,5 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-val init: root:string -> string -> unit Lwt.t
-val push: root:string -> msg:string -> ?watch:float -> Uri.t -> unit Lwt.t
+val cmd: root:string -> ?interval:float -> ?once:bool -> string -> string ->
+  unit Lwt.t

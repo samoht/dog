@@ -10,7 +10,8 @@ BuildTools:  ocamlbuild
 Library dog
   Path:              lib/
   Findlibname:       dog
-  Modules:           Dog, Dog_client, Dog_misc
+  InternalModules:   Dog_misc
+  Modules:           Dog_listen, Dog_watch
   BuildDepends:      lwt, irmin.unix, re.glob, dolog
 
 Executable dog
@@ -27,16 +28,3 @@ Document dog
   Install:              true
   XOCamlbuildPath:      lib
   XOCamlbuildLibraries: dog
-
-Executable test_git
-  Build$:           flag(tests)
-  Path:             lib_test
-  MainIs:           test.ml
-  CompiledObject:   best
-  Install:          false
-  BuildDepends:     alcotest, dog, dolog
-
-Test test_dog
-  Run$:             flag(tests)
-  Command:          $test_git -q
-  WorkingDirectory: lib_test/

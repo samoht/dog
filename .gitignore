@@ -9,3 +9,11 @@ setup.log
 main.native
 bin/version.ml
 _tests
+doc
+lib/META
+*.mllib
+*.odocl
+*.mldylib
+_tags
+myocamlbuild.ml
+setup.ml

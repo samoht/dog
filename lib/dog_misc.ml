@@ -15,7 +15,6 @@
  *)
 
 open Printf
-open Irmin_unix
 
 let () =
   let debug = try match Sys.getenv "DOGDEBUG" with
@@ -25,8 +24,6 @@ let () =
       false
   in
   if debug then Log.set_log_level Log.DEBUG
-
-let (>>=) = Lwt.bind
 
 let red fmt = sprintf ("\027[31m"^^fmt^^"\027[m")
 let green fmt = sprintf ("\027[32m"^^fmt^^"\027[m")
@@ -43,14 +40,6 @@ let rec pretty_list ?(last="and") = function
   | [a]   -> a
   | [a;b] -> Printf.sprintf "%s %s %s" a last b
   | h::t  -> Printf.sprintf "%s, %s" h (pretty_list t)
-
-let string_chop_prefix t ~prefix =
-  let lt = String.length t in
-  let lp = String.length prefix in
-  if lt < lp then None else
-    let p = String.sub t 0 lp in
-    if String.compare p prefix <> 0 then None
-    else Some (String.sub t lp (lt - lp))
 
 let task msg =
   let date = Int64.of_float (Unix.gettimeofday ()) in
@@ -70,30 +59,6 @@ let task msg =
   in
   Irmin.Task.create ~date ~owner msg
 
-(* Used for read the config file *)
-let base_store =
-  let module C = struct
-    include Irmin.Contents.String
-    let merge _ ~old:_ _ _ = assert false
-  end in
-  Irmin.basic (module Irmin_git.FS) (module C)
-
-let mk_store store ~root =
-  Git_unix.FS.create ~root () >>= fun g ->
-  Git_unix.FS.read_head g >>= function
-  | None  -> failwith (sprintf "%s is not a valid Git repository" root)
-  | Some (Git.Reference.SHA _) ->
-    failwith (sprintf "%s does not have a valid branch" root)
-  | Some (Git.Reference.Ref r) ->
-    let name =
-      let head = Git.Reference.to_raw r in
-      match string_chop_prefix head ~prefix:"refs/heads/" with
-      | None   -> failwith (sprintf "%s is not a valid reference" head)
-      | Some n -> n
-    in
-    let config = Irmin_git.config ~root ~bare:false ~head:r () in
-    Irmin.of_tag store config task name
-
 type path = string list
 let path l = String.concat "/" l
 
@@ -109,3 +74,20 @@ let timestamp () =
     (tm.Unix.tm_min)
     (tm.Unix.tm_sec)
     (int_of_float (1_000. *. us))
+
+let git_push ~root ?(force=true) ?(branch="master") url =
+  (* FIXME: to replace by ocaml-git push at one point *)
+  let redirect = match Log.get_log_level () with
+    | Log.DEBUG | Log.INFO -> ""
+    | _ -> " > /dev/null 2>&1"
+  in
+  let force = if force then " --force" else "" in
+  let cmd =
+    Printf.sprintf "cd %s && git push %s %s%s%s" root url branch force redirect
+  in
+  let i = Sys.command cmd in
+  if i <> 0 then failwith "git push failed";
+  Lwt.return_unit
+
+module Store = Irmin_unix.Irmin_git.FS
+    (Irmin.Contents.String) (Irmin.Ref.String) (Irmin.Hash.SHA1)
