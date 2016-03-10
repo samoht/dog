@@ -2,60 +2,47 @@
 
 A loyal and faithful synchronisation tool that you can rely on.
 
-### Client Commands
+This simple tool allows to watch distributed directories and gather
+the changes in a central Git repository, where every watched directories
+appear as sub-directories.
 
-#### Init
-
-Init the client.
-
-```
-# init the client
-dog init <NAME>
-```
-
-- `<NAME>` is the client name. It is is used to identify the client in
-  an unique way for both the server's branch name mirroring the client's
-  master and for the client's commit username.
-
-#### Push
-
-Send data to the server. The error code indicate server merge success or error.
+### Example
 
 ```
-dog push -m "<MSG>" <SERVER>
+# Machine A, watch the current directory and make it available
+# as `<global-name-A>` globally
+dog watch <global-name-A> <server-url>
+
+# Machine B, watch the current directory and make it available
+# as `<global-name-B>` globally
+dog wath <global-name-B> <server-url>
 ```
 
-- <MSG> is the commit message.
-- `<SERVER>` is the server url.
-
-### Server commands
-
-#### Listen
-
-Start the server and listen for incoming clients.
-
+The on the server, the Git repository corresponding to `<server-url>`
+will have the file hierarchy:
 ```
-dog listen
-```
-
-### Structure
-
-On the client side, the current branch is the client name:
-
-```
-[client] $ git branch
-* <NAME-1>
-[client] $ tree
+<global-name-A>/<files watched on machine A>
+<global-name-B>/<files watches on machine B>
 ...
 ```
 
-On the server side, every client state is stored in a subtree of the master
-branch:
+With the full history of changes.
+
+### Running the server
+
+The easiest way to run a dog server is to run:
 
 ```
-[server]$ git branch
-* master
-[server] $ tree
-<NAME-1>/...
-<NAME-2>/...
+docker run -it --rm -p 22:22 \
+  -v <secrets>/id_rsa.pub:/root/.ssh/authorized_keys \
+  -v <git-repo>:/data samoht/dogd
+```
+
+Or you can use the `dog listen` commands.
+
+### Running the client
+
+```
+dog watch --once --root=<directory-to-watch> \
+    <client/branch-name> <ssh-server-url>:/data
 ```
