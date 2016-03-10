@@ -35,7 +35,8 @@ The easiest way to run a dog server is to run:
 ```
 docker run -it --rm -p 22:22 \
   -v <secrets>/id_rsa.pub:/root/.ssh/authorized_keys \
-  -v <git-repo>:/data samoht/dogd
+  -v <git-repo>:/data \
+  samoht/dogd
 ```
 
 Or you can use the `dog listen` commands.
@@ -43,6 +44,13 @@ Or you can use the `dog listen` commands.
 ### Running the client
 
 ```
-dog watch --once --root=<directory-to-watch> \
-    <client/branch-name> <ssh-server-url>:/data
+dog watch --root=<directory-to-watch> <global-name> <ssh-server-url>:/data
+```
+
+For one-shot updates, you can use `dog watch --once` or simply:
+
+```
+cd <directory-to-watch> && git init && \
+  git add * && git commit -a -m "Dog" && \
+  git push <ssh-server-url>:/data <global-name> --force
 ```
