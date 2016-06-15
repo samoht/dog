@@ -4,11 +4,7 @@ MAINTAINER Thomas Gazagnaire <thomas@gazagnaire.org>
 
 RUN sudo apk update
 
-COPY lib /home/opam/src/dog/lib
-COPY bin /home/opam/src/dog/bin
-COPY Makefile /home/opam/src/dog/Makefile
-COPY _oasis /home/opam/src/dog/_oasis
-COPY opam /home/opam/src/dog/opam
+COPY . /home/opam/src/dog
 
 RUN sudo chown -R opam.nogroup /home/opam/src && \
      opam pin add dog /home/opam/src/dog -n && \

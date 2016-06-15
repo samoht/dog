@@ -6,23 +6,16 @@ homepage:     "https://github.com/samoht/dog"
 bug-reports:  "https://github.com/samoht/dog/issues"
 dev-repo:     "https://github.com/samoht/dog.git"
 
-build: [
-  [make "PREFIX=%{prefix}%"]
-  [make]
-]
-build-test: [
-  [make "test"]
-]
-install: [make "install"]
-remove: ["ocamlfind" "remove" "dog"]
+build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" pinned]
 depends: [
-  "ocamlfind" {build}
+  "ocamlfind"  {build}
   "ocamlbuild" {build}
-  "oasis" {build}
+  "topkg"      {build}
   "lwt" {>= "2.4.5"}
   "irmin" {>= "0.10.0"}
   "irmin-unix"
   "git" {>= "1.4.10"}
+  "logs" "fmt"
   "cmdliner"
 ]
 available: [ocaml-version >= "4.02.3"]

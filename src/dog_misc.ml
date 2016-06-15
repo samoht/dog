@@ -16,15 +16,6 @@
 
 open Printf
 
-let () =
-  let debug = try match Sys.getenv "DOGDEBUG" with
-    | "" -> false
-    | _  -> true
-    with Not_found ->
-      false
-  in
-  if debug then Log.set_log_level Log.DEBUG
-
 let red fmt = sprintf ("\027[31m"^^fmt^^"\027[m")
 let green fmt = sprintf ("\027[32m"^^fmt^^"\027[m")
 let yellow fmt = sprintf ("\027[33m"^^fmt^^"\027[m")
@@ -77,8 +68,8 @@ let timestamp () =
 
 let git_push ~root ?(force=true) ?(branch="master") url =
   (* FIXME: to replace by ocaml-git push at one point *)
-  let redirect = match Log.get_log_level () with
-    | Log.DEBUG | Log.INFO -> ""
+  let redirect = match Logs.level () with
+    | Some (Logs.Debug | Logs.Info) -> ""
     | _ -> " > /dev/null 2>&1"
   in
   let force = if force then " --force" else "" in
