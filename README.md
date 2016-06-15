@@ -15,14 +15,14 @@ dog watch <global-name-A> <server-url>
 
 # Machine B, watch the current directory and make it available
 # as `<global-name-B>` globally
-dog wath <global-name-B> <server-url>
+dog watch <global-name-B> <server-url>
 ```
 
 The on the server, the Git repository corresponding to `<server-url>`
 will have the file hierarchy:
 ```
 <global-name-A>/<files watched on machine A>
-<global-name-B>/<files watches on machine B>
+<global-name-B>/<files watched on machine B>
 ...
 ```
 
