@@ -17,17 +17,6 @@
 open Cmdliner
 open Printf
 
-(* Global options *)
-type global = {
-  level: Log.log_level option;
-}
-
-let app_global g =
-  Log.color_on ();
-  match g.level with
-  | None   -> ()
-  | Some d -> Log.set_log_level d
-
 (* Help sections common to all commands *)
 let copts_sect = "COMMON OPTIONS"
 let help_secs = [
@@ -41,21 +30,14 @@ let help_secs = [
   `P "Check bug reports at https://github.com/samoht/dog/issues.";
 ]
 
-let global =
-  let debug =
-    let doc = Arg.info ~docs:copts_sect ~doc:"Be very verbose." ["debug"] in
-    Arg.(value & flag & doc)
-  in
-  let verbose =
-    let doc = Arg.info ~docs:copts_sect ~doc:"Be verbose." ["v";"verbose"] in
-    Arg.(value & flag & doc)
-  in
-  let level debug verbose = match debug, verbose with
-    | true, _    -> { level = Some Log.DEBUG }
-    | _   , true -> { level = Some Log.INFO }
-    | _          -> { level = None }
-  in
-  Term.(pure level $ debug $ verbose)
+let setup_log style_renderer level =
+  Fmt_tty.setup_std_outputs ?style_renderer ();
+  Logs.set_level level;
+  Logs.set_reporter (Logs_fmt.reporter ());
+  ()
+
+let setup_log =
+  Term.(const setup_log $ Fmt_cli.style_renderer () $ Logs_cli.level ())
 
 let term_info title ~doc ~man =
   let man = man @ help_secs in
@@ -73,7 +55,7 @@ let run t =
   )
 
 let mk (fn:'a): 'a Term.t =
-  Term.(pure (fun global -> app_global global; fn) $ global)
+  Term.(pure (fun () -> fn) $ setup_log)
 
 let cwd = Sys.getcwd ()
 
@@ -149,8 +131,7 @@ let default_cmd =
     `S "DESCRIPTION";
     `P "FIXME";
   ] in
-  let usage global =
-    app_global global;
+  let usage () =
     printf
       "usage: dog [--version]\n\
       \           [--help]\n\
@@ -163,9 +144,9 @@ let default_cmd =
       See `dog help <command>` for more information on a specific command.\n%!"
       watch_doc listen_doc
   in
-  Term.(pure usage $ global),
+  Term.(pure usage $ setup_log),
   Term.info "dog"
-    ~version:Version.current
+    ~version:"%%VERSION%%"
     ~sdocs:copts_sect
     ~doc
     ~man

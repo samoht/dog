@@ -70,7 +70,7 @@ let read_file p =
   let buf = Bytes.create len in
   really_input ic buf 0 len;
   close_in ic;
-  buf
+  Bytes.to_string buf
 
 module View = Irmin.View(Store)
 
