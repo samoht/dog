@@ -1,6 +1,4 @@
-## Dog
-
-A loyal and faithful synchronisation tool that you can rely on.
+## Dog -- A loyal and faithful synchronisation tool that you can rely on.
 
 This simple tool allows to watch distributed directories and gather
 the changes in a central Git repository, where every watched directories
